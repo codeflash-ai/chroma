@@ -22,6 +22,7 @@ import {
   CreateCollectionConfiguration,
   processCreateCollectionConfig,
 } from "./collection-configuration";
+import { Schema } from "./schema";
 
 /**
  * Configuration options for the ChromaClient.
@@ -217,21 +218,21 @@ export class ChromaClient {
     });
 
     return Promise.all(
-      data.map(
-        async (collection) =>
-          new CollectionImpl({
-            chromaClient: this,
-            apiClient: this.apiClient,
-            name: collection.name,
-            id: collection.id,
-            embeddingFunction: await getEmbeddingFunction(
-              collection.name,
-              collection.configuration_json.embedding_function ?? undefined,
-            ),
-            configuration: collection.configuration_json,
-            metadata:
-              deserializeMetadata(collection.metadata ?? undefined) ?? undefined,
-          }),
+      data.map(async (collection) =>
+        new CollectionImpl({
+          chromaClient: this,
+          apiClient: this.apiClient,
+          name: collection.name,
+          id: collection.id,
+          embeddingFunction: await getEmbeddingFunction(
+            collection.name,
+            collection.configuration_json.embedding_function ?? undefined,
+          ),
+          configuration: collection.configuration_json,
+          metadata:
+            deserializeMetadata(collection.metadata ?? undefined) ?? undefined,
+          schema: Schema.deserializeFromJSON(collection.schema ?? undefined),
+        }),
       ),
     );
   }
@@ -264,11 +265,13 @@ export class ChromaClient {
     configuration,
     metadata,
     embeddingFunction,
+    schema,
   }: {
     name: string;
     configuration?: CreateCollectionConfiguration;
     metadata?: CollectionMetadata;
     embeddingFunction?: EmbeddingFunction | null;
+    schema?: Schema;
   }): Promise<Collection> {
     const collectionConfig = await processCreateCollectionConfig({
       configuration,
@@ -284,8 +287,11 @@ export class ChromaClient {
         configuration: collectionConfig,
         metadata: serializeMetadata(metadata),
         get_or_create: false,
+        schema: schema ? schema.serializeToJSON() : undefined,
       },
     });
+
+    const serverSchema = Schema.deserializeFromJSON(data.schema ?? undefined);
 
     return new CollectionImpl({
       chromaClient: this,
@@ -300,6 +306,7 @@ export class ChromaClient {
           data.configuration_json.embedding_function ?? undefined,
         )),
       id: data.id,
+      schema: serverSchema,
     });
   }
 
@@ -323,6 +330,8 @@ export class ChromaClient {
       path: { ...(await this._path()), collection_id: name },
     });
 
+    const schema = Schema.deserializeFromJSON(data.schema ?? undefined);
+
     return new CollectionImpl({
       chromaClient: this,
       apiClient: this.apiClient,
@@ -336,6 +345,7 @@ export class ChromaClient {
           data.configuration_json.embedding_function ?? undefined,
         ),
       id: data.id,
+      schema,
     });
   }
 
@@ -382,11 +392,13 @@ export class ChromaClient {
     configuration,
     metadata,
     embeddingFunction,
+    schema,
   }: {
     name: string;
     configuration?: CreateCollectionConfiguration;
     metadata?: CollectionMetadata;
     embeddingFunction?: EmbeddingFunction | null;
+    schema?: Schema;
   }): Promise<Collection> {
     const collectionConfig = await processCreateCollectionConfig({
       configuration,
@@ -402,8 +414,11 @@ export class ChromaClient {
         configuration: collectionConfig,
         metadata: serializeMetadata(metadata),
         get_or_create: true,
+        schema: schema ? schema.serializeToJSON() : undefined,
       },
     });
+
+    const serverSchema = Schema.deserializeFromJSON(data.schema ?? undefined);
 
     return new CollectionImpl({
       chromaClient: this,
@@ -418,6 +433,7 @@ export class ChromaClient {
           data.configuration_json.embedding_function ?? undefined,
         )),
       id: data.id,
+      schema: serverSchema,
     });
   }
 
