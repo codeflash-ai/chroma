@@ -2018,7 +2018,7 @@ impl GrpcSysDb {
             tenant_id: task.tenant_id.clone(),
             database_id: task.database_id.clone(),
             last_run: None,
-            next_run: next_run,
+            next_run,
             lowest_live_nonce,
             next_nonce,
             completion_offset: task.completion_offset as u64,

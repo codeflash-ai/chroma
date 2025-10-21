@@ -92,7 +92,7 @@ impl RegisterInput {
 #[derive(Debug)]
 pub struct RegisterOutput {
     _sysdb_registration_result: FlushCompactionResponse,
-    pub updated_task: Option<chroma_types::Task>,
+    pub _updated_task: Option<chroma_types::Task>,
 }
 
 #[derive(Error, Debug)]
@@ -145,7 +145,6 @@ impl Operator<RegisterInput, RegisterOutput> for RegisterOperator {
                     )
                 })?;
 
-                const DEFAULT_THROTTLE_INTERVAL_SECS: u64 = 60;
                 // log_position is "up to which offset we've compacted"
                 // completion_offset is "last offset processed"
                 // In practice, log_position means "next offset to start compacting from"
@@ -157,7 +156,7 @@ impl Operator<RegisterInput, RegisterOutput> for RegisterOperator {
                 };
                 let task_update = chroma_types::TaskUpdateInfo {
                     task_id: task.id,
-                    task_run_nonce: task_context.execution_nonce.0, // Use execution_nonce from context
+                    task_run_nonce: task_context.execution_nonce,
                     completion_offset: last_offset_processed,
                 };
                 // Task-based compaction
@@ -188,7 +187,7 @@ impl Operator<RegisterInput, RegisterOutput> for RegisterOperator {
                         collection_version: task_response.collection_version,
                         last_compaction_time: task_response.last_compaction_time,
                     },
-                    updated_task: Some(updated_task),
+                    _updated_task: Some(updated_task),
                 })
             }
             None => {
@@ -219,7 +218,7 @@ impl Operator<RegisterInput, RegisterOutput> for RegisterOperator {
 
                 Ok(RegisterOutput {
                     _sysdb_registration_result: response,
-                    updated_task: None,
+                    _updated_task: None,
                 })
             }
         }
