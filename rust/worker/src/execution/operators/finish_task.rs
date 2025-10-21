@@ -3,10 +3,8 @@ use chroma_error::{ChromaError, ErrorCodes};
 use chroma_log::Log;
 use chroma_sysdb::SysDb;
 use chroma_system::Operator;
-use chroma_types::chroma_proto::heap_tender_service_client::HeapTenderServiceClient;
 use chroma_types::{FinishTaskError as SysDbFinishTaskError, Task, TaskUuid};
 use thiserror::Error;
-use tonic::transport::Channel;
 
 /// The finish task operator is responsible for updating task state in SysDB
 /// after a successful task execution run.
@@ -14,22 +12,12 @@ use tonic::transport::Channel;
 pub struct FinishTaskOperator {
     log_client: Log,
     sysdb: SysDb,
-    heap_service_client: HeapTenderServiceClient<Channel>,
 }
 
 impl FinishTaskOperator {
     /// Create a new finish task operator.
-    #[allow(dead_code)]
-    pub fn new(
-        log_client: Log,
-        sysdb: SysDb,
-        heap_service_client: HeapTenderServiceClient<Channel>,
-    ) -> Box<Self> {
-        Box::new(FinishTaskOperator {
-            log_client,
-            sysdb,
-            heap_service_client,
-        })
+    pub fn new(log_client: Log, sysdb: SysDb) -> Box<Self> {
+        Box::new(FinishTaskOperator { log_client, sysdb })
     }
 }
 
@@ -46,7 +34,6 @@ pub struct FinishTaskInput {
 
 impl FinishTaskInput {
     /// Create a new finish task input.
-    #[allow(dead_code)]
     pub fn new(updated_task: Task) -> Self {
         FinishTaskInput { updated_task }
     }
@@ -65,8 +52,6 @@ pub enum FinishTaskError {
     ScoutLogsError(String),
     #[error("Failed to finish task in SysDB: {0}")]
     SysDbError(#[from] SysDbFinishTaskError),
-    #[error("Failed to push task to heap service: {0}")]
-    HeapServiceError(String),
 }
 
 impl ChromaError for FinishTaskError {
@@ -74,7 +59,6 @@ impl ChromaError for FinishTaskError {
         match self {
             FinishTaskError::ScoutLogsError(_) => ErrorCodes::Internal,
             FinishTaskError::SysDbError(e) => e.code(),
-            FinishTaskError::HeapServiceError(_) => ErrorCodes::Internal,
         }
     }
 }
@@ -129,36 +113,7 @@ impl Operator<FinishTaskInput, FinishTaskOutput> for FinishTaskOperator {
                 "Detected new records written during task execution that exceed threshold"
             );
 
-            // Schedule a new task for next nonce by pushing to the heap
-            let next_scheduled = prost_types::Timestamp::from(input.updated_task.next_run);
-            let schedule = chroma_types::chroma_proto::Schedule {
-                triggerable: Some(chroma_types::chroma_proto::Triggerable {
-                    partitioning_uuid: input.updated_task.input_collection_id.0.to_string(),
-                    scheduling_uuid: input.updated_task.id.0.to_string(),
-                }),
-                next_scheduled: Some(next_scheduled),
-                nonce: input.updated_task.next_nonce.0.to_string(),
-            };
-
-            let push_request = chroma_types::chroma_proto::PushRequest {
-                schedules: vec![schedule],
-            };
-
-            let mut heap_client = self.heap_service_client.clone();
-            heap_client.push(push_request).await.map_err(|e| {
-                tracing::error!(
-                    task_id = %input.updated_task.id.0,
-                    error = %e,
-                    "Failed to push new task schedule to heap service"
-                );
-                FinishTaskError::HeapServiceError(format!("Failed to push to heap: {}", e))
-            })?;
-
-            tracing::info!(
-                task_id = %input.updated_task.id.0,
-                next_nonce = %input.updated_task.next_nonce.0,
-                "Successfully pushed new task schedule to heap service"
-            );
+            // TODO(tanujnay112): Schedule a new task for next nonce by pushing to the heap
         }
 
         // Step 2: Update lowest_live_nonce to equal next_nonce
@@ -202,21 +157,6 @@ mod tests {
                 .await
                 .unwrap(),
         )
-    }
-
-    async fn get_heap_service_client() -> Option<HeapTenderServiceClient<Channel>> {
-        let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50052");
-        match endpoint.connect().await {
-            Ok(channel) => Some(HeapTenderServiceClient::new(channel)),
-            Err(e) => {
-                eprintln!(
-                    "Warning: Could not connect to heap service at localhost:50052: {}",
-                    e
-                );
-                eprintln!("Tests will run without heap scheduling functionality");
-                None
-            }
-        }
     }
 
     async fn setup_tenant_and_database(
@@ -295,9 +235,8 @@ mod tests {
         assert_eq!(task_advanced.lowest_live_nonce, Some(initial_nonce));
         assert_ne!(task_advanced.next_nonce, initial_nonce);
 
-        let heap_client = get_heap_service_client().await.unwrap();
         let input = FinishTaskInput::new(task_advanced.clone());
-        let operator = FinishTaskOperator::new(log.clone(), sysdb.clone(), heap_client);
+        let operator = FinishTaskOperator::new(log.clone(), sysdb.clone());
 
         // Run finish_task - should move lowest_live_nonce up to match next_nonce
         let result = operator.run(&input).await;
@@ -348,9 +287,8 @@ mod tests {
         assert_eq!(task_after_advance.next_nonce, nonce_b);
         assert_ne!(nonce_a, nonce_b);
 
-        let heap_client = get_heap_service_client().await.unwrap();
         let input = FinishTaskInput::new(task_after_advance.clone());
-        let operator = FinishTaskOperator::new(log.clone(), sysdb.clone(), heap_client);
+        let operator = FinishTaskOperator::new(log.clone(), sysdb.clone());
 
         // Run finish_task
         let result = operator.run(&input).await;
@@ -397,9 +335,8 @@ mod tests {
             lowest_live_nonce: None,
         };
 
-        let heap_client = get_heap_service_client().await.unwrap();
         let input = FinishTaskInput::new(fake_task.clone());
-        let operator = FinishTaskOperator::new(log.clone(), sysdb.clone(), heap_client);
+        let operator = FinishTaskOperator::new(log.clone(), sysdb.clone());
 
         // Run
         let result = operator.run(&input).await;
