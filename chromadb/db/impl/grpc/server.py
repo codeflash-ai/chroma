@@ -55,6 +55,8 @@ import grpc
 from google.protobuf.empty_pb2 import Empty
 from chromadb.types import Collection, Metadata, Segment, SegmentScope
 
+_ZERO_UUID = UUID(int=0)
+
 
 class GrpcMockSysDB(SysDBServicer, Component):
     """A mock sysdb implementation that can be used for testing the grpc client. It stores
@@ -88,13 +90,13 @@ class GrpcMockSysDB(SysDBServicer, Component):
 
     @overrides
     def reset_state(self) -> None:
+        # Use local variable for default tenant/database for faster reference
+        tenant = DEFAULT_TENANT
+        db = DEFAULT_DATABASE
+
         self._segments = {}
-        self._tenants_to_databases_to_collections = {}
-        # Create defaults
-        self._tenants_to_databases_to_collections[DEFAULT_TENANT] = {}
-        self._tenants_to_databases_to_collections[DEFAULT_TENANT][DEFAULT_DATABASE] = {}
-        self._tenants_to_database_to_id[DEFAULT_TENANT] = {}
-        self._tenants_to_database_to_id[DEFAULT_TENANT][DEFAULT_DATABASE] = UUID(int=0)
+        self._tenants_to_databases_to_collections = {tenant: {db: {}}}
+        self._tenants_to_database_to_id = {tenant: {db: _ZERO_UUID}}
         return super().reset_state()
 
     @overrides(check_signature=False)
