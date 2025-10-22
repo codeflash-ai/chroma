@@ -889,7 +889,13 @@ class Rank:
 
     def __truediv__(self, other: Union["Rank", float, int]) -> "Div":
         """Division: rank1 / rank2 or rank / value"""
-        other_rank = Val(other) if isinstance(other, (int, float)) else other
+        # Inline the isinstance check without tuple creation to avoid an extra allocation.
+        # Use direct type comparison for the common float and int cases for a micro-optimization.
+        t = type(other)
+        if t is float or t is int:
+            other_rank = Val(other)
+        else:
+            other_rank = other
         return Div(self, other_rank)
 
     def __rtruediv__(self, other: Union[float, int]) -> "Div":
