@@ -87,9 +87,12 @@ class TokenAuthClientProvider(ClientAuthProvider):
         super().__init__(system)
         self._settings = system.settings
 
+        # Cache required settings and pre-compute token and transport header to minimize per-call work
         system.settings.require("chroma_client_auth_credentials")
-        self._token = SecretStr(str(system.settings.chroma_client_auth_credentials))
-        _check_token(self._token.get_secret_value())
+        # token string is always immutable and safe to cache
+        token_value = str(system.settings.chroma_client_auth_credentials)
+        self._token = SecretStr(token_value)
+        _check_token(token_value)
 
         if system.settings.chroma_auth_token_transport_header:
             _check_allowed_token_headers(
@@ -101,14 +104,21 @@ class TokenAuthClientProvider(ClientAuthProvider):
         else:
             self._token_transport_header = TokenTransportHeader.AUTHORIZATION
 
+        # Precompute full header value, respecting the chosen transport header
+        # This reduces string formatting and SecretStr allocation on every authenticate() call
+        if self._token_transport_header == TokenTransportHeader.AUTHORIZATION:
+            formatted_val = f"Bearer {token_value}"
+        else:
+            formatted_val = token_value
+        # Precompute the authentication header as a constant dictionary (SecretStr is immutable)
+        self._auth_header: ClientAuthHeaders = {
+            self._token_transport_header.value: SecretStr(formatted_val)
+        }
+
     @override
     def authenticate(self) -> ClientAuthHeaders:
-        val = self._token.get_secret_value()
-        if self._token_transport_header == TokenTransportHeader.AUTHORIZATION:
-            val = f"Bearer {val}"
-        return {
-            self._token_transport_header.value: SecretStr(val),
-        }
+        # Just return the precomputed auth header for optimal speed and memory usage
+        return self._auth_header
 
 
 class User(TypedDict):
