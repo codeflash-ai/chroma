@@ -525,10 +525,11 @@ class Limit:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert the Limit to a dictionary for JSON serialization"""
-        result = {"offset": self.offset}
-        if self.limit is not None:
-            result["limit"] = self.limit
-        return result
+        # Fast path: avoid .get and dict manipulation
+        if self.limit is None:
+            return {"offset": self.offset}
+        # Avoid first initializing a partial dict then adding to it
+        return {"offset": self.offset, "limit": self.limit}
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> "Limit":
