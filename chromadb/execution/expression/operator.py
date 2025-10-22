@@ -655,15 +655,15 @@ class Rank:
             )
 
         op = next(iter(data.keys()))
+        val = data[op]
 
         if op == "$val":
-            value = data["$val"]
-            if not isinstance(value, (int, float)):
-                raise TypeError(f"$val requires a number, got {type(value).__name__}")
-            return Val(value)
+            if not isinstance(val, (int, float)):
+                raise TypeError(f"$val requires a number, got {type(val).__name__}")
+            return Val(val)
 
         elif op == "$knn":
-            knn_data = data["$knn"]
+            knn_data = val
             if not isinstance(knn_data, dict):
                 raise TypeError(f"$knn requires a dict, got {type(knn_data).__name__}")
 
@@ -674,7 +674,8 @@ class Rank:
 
             if isinstance(query, dict):
                 # SparseVector case - deserialize from transport format
-                if query.get(TYPE_KEY) == SPARSE_VECTOR_TYPE_VALUE:
+                query_type = query.get(TYPE_KEY)
+                if query_type == SPARSE_VECTOR_TYPE_VALUE:
                     query = SparseVector.from_dict(query)
                 else:
                     # Old format or invalid - try to construct directly
@@ -725,7 +726,7 @@ class Rank:
             )
 
         elif op == "$sum":
-            ranks_data = data["$sum"]
+            ranks_data = val
             if not isinstance(ranks_data, (list, tuple)):
                 raise TypeError(
                     f"$sum requires a list, got {type(ranks_data).__name__}"
@@ -734,15 +735,14 @@ class Rank:
                 raise ValueError(
                     f"$sum requires at least 2 ranks, got {len(ranks_data)}"
                 )
-
-            ranks = [Rank.from_dict(r) for r in ranks_data]
-            result = ranks[0]
-            for r in ranks[1:]:
-                result = result + r
+            # Evaluate and accumulate result, avoiding intermediate lists
+            result = Rank.from_dict(ranks_data[0])
+            for r in ranks_data[1:]:
+                result = result + Rank.from_dict(r)
             return result
 
         elif op == "$sub":
-            sub_data = data["$sub"]
+            sub_data = val
             if not isinstance(sub_data, dict):
                 raise TypeError(
                     f"$sub requires a dict with 'left' and 'right', got {type(sub_data).__name__}"
@@ -755,7 +755,7 @@ class Rank:
             return left - right
 
         elif op == "$mul":
-            ranks_data = data["$mul"]
+            ranks_data = val
             if not isinstance(ranks_data, (list, tuple)):
                 raise TypeError(
                     f"$mul requires a list, got {type(ranks_data).__name__}"
@@ -764,15 +764,13 @@ class Rank:
                 raise ValueError(
                     f"$mul requires at least 2 ranks, got {len(ranks_data)}"
                 )
-
-            ranks = [Rank.from_dict(r) for r in ranks_data]
-            result = ranks[0]
-            for r in ranks[1:]:
-                result = result * r
+            result = Rank.from_dict(ranks_data[0])
+            for r in ranks_data[1:]:
+                result = result * Rank.from_dict(r)
             return result
 
         elif op == "$div":
-            div_data = data["$div"]
+            div_data = val
             if not isinstance(div_data, dict):
                 raise TypeError(
                     f"$div requires a dict with 'left' and 'right', got {type(div_data).__name__}"
@@ -785,7 +783,7 @@ class Rank:
             return left / right
 
         elif op == "$abs":
-            child_data = data["$abs"]
+            child_data = val
             if not isinstance(child_data, dict):
                 raise TypeError(
                     f"$abs requires a rank dict, got {type(child_data).__name__}"
@@ -793,7 +791,7 @@ class Rank:
             return abs(Rank.from_dict(child_data))
 
         elif op == "$exp":
-            child_data = data["$exp"]
+            child_data = val
             if not isinstance(child_data, dict):
                 raise TypeError(
                     f"$exp requires a rank dict, got {type(child_data).__name__}"
@@ -801,7 +799,7 @@ class Rank:
             return Rank.from_dict(child_data).exp()
 
         elif op == "$log":
-            child_data = data["$log"]
+            child_data = val
             if not isinstance(child_data, dict):
                 raise TypeError(
                     f"$log requires a rank dict, got {type(child_data).__name__}"
@@ -809,7 +807,7 @@ class Rank:
             return Rank.from_dict(child_data).log()
 
         elif op == "$max":
-            ranks_data = data["$max"]
+            ranks_data = val
             if not isinstance(ranks_data, (list, tuple)):
                 raise TypeError(
                     f"$max requires a list, got {type(ranks_data).__name__}"
@@ -818,15 +816,13 @@ class Rank:
                 raise ValueError(
                     f"$max requires at least 2 ranks, got {len(ranks_data)}"
                 )
-
-            ranks = [Rank.from_dict(r) for r in ranks_data]
-            result = ranks[0]
-            for r in ranks[1:]:
-                result = result.max(r)
+            result = Rank.from_dict(ranks_data[0])
+            for r in ranks_data[1:]:
+                result = result.max(Rank.from_dict(r))
             return result
 
         elif op == "$min":
-            ranks_data = data["$min"]
+            ranks_data = val
             if not isinstance(ranks_data, (list, tuple)):
                 raise TypeError(
                     f"$min requires a list, got {type(ranks_data).__name__}"
@@ -835,11 +831,9 @@ class Rank:
                 raise ValueError(
                     f"$min requires at least 2 ranks, got {len(ranks_data)}"
                 )
-
-            ranks = [Rank.from_dict(r) for r in ranks_data]
-            result = ranks[0]
-            for r in ranks[1:]:
-                result = result.min(r)
+            result = Rank.from_dict(ranks_data[0])
+            for r in ranks_data[1:]:
+                result = result.min(Rank.from_dict(r))
             return result
 
         else:
