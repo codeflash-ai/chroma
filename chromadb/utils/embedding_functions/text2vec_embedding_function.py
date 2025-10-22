@@ -17,12 +17,16 @@ class Text2VecEmbeddingFunction(EmbeddingFunction[Documents]):
             model_name (str, optional): The name of the model to use for text embeddings.
                 Defaults to "shibing624/text2vec-base-chinese".
         """
-        try:
-            from text2vec import SentenceModel
-        except ImportError:
+        # Localize import, but only once, outside try block to reduce overhead
+        import importlib
+
+        text2vec_spec = importlib.util.find_spec("text2vec")
+        if text2vec_spec is None:
             raise ValueError(
                 "The text2vec python package is not installed. Please install it with `pip install text2vec`"
             )
+
+        from text2vec import SentenceModel
 
         self.model_name = model_name
         self._model = SentenceModel(model_name_or_path=model_name)
