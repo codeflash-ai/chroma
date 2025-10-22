@@ -227,16 +227,17 @@ def normalize_embeddings(
         if target.ndim == 1:
             return [target]
         elif target.ndim == 2:
-            return [row for row in target]
+            return list(target)
     elif isinstance(target, list):
-        # One PyEmbedding
-        if isinstance(target[0], (int, float)) and not isinstance(target[0], bool):
+        first = target[0]
+        if isinstance(first, (int, float)) and not isinstance(first, bool):
             return [np.array(target, dtype=np.float32)]
-        elif isinstance(target[0], np.ndarray):
+        elif isinstance(first, np.ndarray):
             return cast(Embeddings, target)
-        elif isinstance(target[0], list):
-            if isinstance(target[0][0], (int, float)) and not isinstance(
-                target[0][0], bool
+        elif isinstance(first, list):
+            inner_first = first[0]
+            if isinstance(inner_first, (int, float)) and not isinstance(
+                inner_first, bool
             ):
                 return [np.array(row, dtype=np.float32) for row in target]
 
@@ -1270,10 +1271,12 @@ def validate_embeddings(embeddings: Embeddings) -> Embeddings:
         raise ValueError(
             f"Expected embeddings to be a list with at least one item, got {len(embeddings)} embeddings"
         )
-    if not all([isinstance(e, np.ndarray) for e in embeddings]):
+    # Use generator expression for memory efficiency
+    if not all(isinstance(e, np.ndarray) for e in embeddings):
+        types_seen = set(type(e).__name__ for e in embeddings)
         raise ValueError(
             "Expected each embedding in the embeddings to be a numpy array, got "
-            f"{list(set([type(e).__name__ for e in embeddings]))}"
+            f"{list(types_seen)}"
         )
     for i, embedding in enumerate(embeddings):
         if embedding.ndim == 0:
@@ -1285,13 +1288,13 @@ def validate_embeddings(embeddings: Embeddings) -> Embeddings:
                 f"Expected each embedding in the embeddings to be a 1-dimensional numpy array with at least 1 int/float value. Got a 1-dimensional numpy array with no values at pos {i}"
             )
 
-        if embedding.dtype not in [
+        if embedding.dtype not in (
             np.float16,
             np.float32,
             np.float64,
             np.int32,
             np.int64,
-        ]:
+        ):
             raise ValueError(
                 "Expected each value in the embedding to be a int or float, got an embedding with "
                 f"{embedding.dtype} - {embedding}"

@@ -80,9 +80,10 @@ class SparseVector:
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "SparseVector":
         """Deserialize from transport format (strict - requires #type field)."""
-        if d.get(TYPE_KEY) != SPARSE_VECTOR_TYPE_VALUE:
+        type_val = d[TYPE_KEY]
+        if type_val != SPARSE_VECTOR_TYPE_VALUE:
             raise ValueError(
-                f"Expected {TYPE_KEY}='{SPARSE_VECTOR_TYPE_VALUE}', got {d.get(TYPE_KEY)}"
+                f"Expected {TYPE_KEY}='{SPARSE_VECTOR_TYPE_VALUE}', got {type_val}"
             )
         return cls(indices=d["indices"], values=d["values"])
 
