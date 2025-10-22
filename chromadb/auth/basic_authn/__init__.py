@@ -46,15 +46,21 @@ class BasicAuthClientProvider(ClientAuthProvider):
         self._settings = system.settings
         system.settings.require("chroma_client_auth_credentials")
         self._creds = SecretStr(str(system.settings.chroma_client_auth_credentials))
+        # Precompute the base64-encoded credentials, since credentials are immutable for the lifetime of the provider instance.
+        secret_value = self._creds.get_secret_value()
+        # Avoid redundant str() conversion if it's already a string
+        if not isinstance(secret_value, str):
+            secret_value = str(secret_value)
+        self._basic_header = {
+            AUTHORIZATION_HEADER: SecretStr(
+                f"Basic {base64.b64encode(secret_value.encode('utf-8')).decode('utf-8') }"
+            )
+        }
 
     @override
     def authenticate(self) -> ClientAuthHeaders:
-        encoded = base64.b64encode(
-            f"{self._creds.get_secret_value()}".encode("utf-8")
-        ).decode("utf-8")
-        return {
-            AUTHORIZATION_HEADER: SecretStr(f"Basic {encoded}"),
-        }
+        # Return the precomputed header directly for optimal performance
+        return self._basic_header
 
 
 class BasicAuthenticationServerProvider(ServerAuthenticationProvider):
