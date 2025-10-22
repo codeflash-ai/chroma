@@ -44,7 +44,7 @@ class CohereEmbeddingFunction(EmbeddingFunction[Embeddable]):
                 DeprecationWarning,
             )
         self.api_key_env_var = api_key_env_var
-        self.api_key = api_key or os.getenv(api_key_env_var)
+        self.api_key = api_key or os.environ.get(api_key_env_var)
         if not self.api_key:
             raise ValueError(f"The {api_key_env_var} environment variable is not set.")
 
