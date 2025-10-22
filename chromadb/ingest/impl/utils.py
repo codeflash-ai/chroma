@@ -41,9 +41,12 @@ def trigger_vector_segments_max_seq_id_migration(
         )
         collection_ids_with_unmigrated_segments = [row[0] for row in cur.fetchall()]
 
-    if len(collection_ids_with_unmigrated_segments) == 0:
+    if not collection_ids_with_unmigrated_segments:
         return
 
-    for collection_id in collection_ids_with_unmigrated_segments:
-        # Loading the segment triggers the migration on init
-        segment_manager.get_segment(UUID(collection_id), VectorReader)
+    vector_reader = VectorReader  # Hoist for local lookup
+    uuid_list = [UUID(cid) for cid in collection_ids_with_unmigrated_segments]
+    get_segment = segment_manager.get_segment  # Localize for minor performance
+
+    for collection_uuid in uuid_list:
+        get_segment(collection_uuid, vector_reader)
