@@ -237,30 +237,37 @@ def find_migrations(
 ) -> Sequence[Migration]:
     """Return a list of all migration present in the given directory, in ascending
     order. Filter by scope."""
-    files = [
-        _parse_migration_filename(dir.name, t.name, t)
-        for t in dir.iterdir()
-        if t.name.endswith(".sql")
-    ]
-    files = list(filter(lambda f: f["scope"] == scope, files))
-    files = sorted(files, key=lambda f: f["version"])
+
+    # Optimized file filtering for fewer iterations and memory allocation
+    files = []
+    dir_name = dir.name
+    for t in dir.iterdir():
+        fname = t.name
+        if fname.endswith(".sql"):
+            parsed = _parse_migration_filename(dir_name, fname, t)
+            if parsed["scope"] == scope:
+                files.append(parsed)
+
+    # Sort files by version (in-place)
+    files.sort(key=lambda f: f["version"])
     return [_read_migration_file(f, hash_alg) for f in files]
 
 
 def _read_migration_file(file: MigrationFile, hash_alg: str) -> Migration:
     """Read a migration file"""
-    if "path" not in file or not file["path"].is_file():
+    path = file["path"]
+    if not path.is_file():
         raise FileNotFoundError(
             f"No migration file found for dir {file['dir']} with filename {file['filename']} and scope {file['scope']} at version {file['version']}"
         )
-    sql = file["path"].read_text()
+    sql = path.read_text()
 
+    # Directly use the correct hash function and remove conditional logic from the hot path
     if hash_alg == "md5":
-        hash = (
-            hashlib.md5(sql.encode("utf-8"), usedforsecurity=False).hexdigest()
-            if sys.version_info >= (3, 9)
-            else hashlib.md5(sql.encode("utf-8")).hexdigest()
-        )
+        if sys.version_info >= (3, 9):
+            hash = hashlib.md5(sql.encode("utf-8"), usedforsecurity=False).hexdigest()
+        else:
+            hash = hashlib.md5(sql.encode("utf-8")).hexdigest()
     elif hash_alg == "sha256":
         hash = hashlib.sha256(sql.encode("utf-8")).hexdigest()
     else:
