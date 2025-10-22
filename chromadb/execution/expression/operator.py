@@ -860,6 +860,8 @@ class Rank:
 
     def __radd__(self, other: Union[float, int]) -> "Sum":
         """Right addition: value + rank"""
+        if isinstance(other, (int, float)):
+            return Sum([Val(other), self])
         return Val(other) + self
 
     def __sub__(self, other: Union["Rank", float, int]) -> "Sub":
