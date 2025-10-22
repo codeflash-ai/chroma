@@ -1249,32 +1249,32 @@ class Select:
                 f"Select keys must be a list/tuple/set, got {type(keys).__name__}"
             )
 
+        # Map special keys to Key instances
+        special_keys = {
+            "#id": Key.ID,
+            "#document": Key.DOCUMENT,
+            "#embedding": Key.EMBEDDING,
+            "#metadata": Key.METADATA,
+            "#score": Key.SCORE,
+        }
+
         # Validate and convert each key
         key_list = []
         for k in keys:
             if not isinstance(k, str):
                 raise TypeError(f"Select key must be a string, got {type(k).__name__}")
 
-            # Map special keys to Key instances
-            if k == "#id":
-                key_list.append(Key.ID)
-            elif k == "#document":
-                key_list.append(Key.DOCUMENT)
-            elif k == "#embedding":
-                key_list.append(Key.EMBEDDING)
-            elif k == "#metadata":
-                key_list.append(Key.METADATA)
-            elif k == "#score":
-                key_list.append(Key.SCORE)
+            # Use dictionary lookup for special keys
+            if k in special_keys:
+                key_list.append(special_keys[k])
             else:
                 # Regular metadata field
                 key_list.append(Key(k))
 
-        # Check for unexpected keys in dict
         allowed_keys = {"keys"}
         unexpected_keys = set(data.keys()) - allowed_keys
         if unexpected_keys:
             raise ValueError(f"Unexpected keys in Select dict: {unexpected_keys}")
 
-        # Convert to set while preserving the Key instances
+        # Construct set directly using key_list
         return Select(keys=set(key_list))
