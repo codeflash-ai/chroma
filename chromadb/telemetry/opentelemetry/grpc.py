@@ -19,7 +19,7 @@ def _encode_span_id(span_id: int) -> str:
 
 
 def _encode_trace_id(trace_id: int) -> str:
-    return binascii.hexlify(trace_id.to_bytes(16, "big")).decode()
+    return trace_id.to_bytes(16, "big").hex()
 
 
 # Using OtelInterceptor with gRPC:
