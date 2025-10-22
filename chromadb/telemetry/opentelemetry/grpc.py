@@ -1,4 +1,3 @@
-import binascii
 import collections
 
 import grpc
@@ -15,11 +14,11 @@ class _ClientCallDetails(
 
 
 def _encode_span_id(span_id: int) -> str:
-    return binascii.hexlify(span_id.to_bytes(8, "big")).decode()
+    return span_id.to_bytes(8, "big").hex()
 
 
 def _encode_trace_id(trace_id: int) -> str:
-    return binascii.hexlify(trace_id.to_bytes(16, "big")).decode()
+    return trace_id.to_bytes(16, "big").hex()
 
 
 # Using OtelInterceptor with gRPC:
@@ -42,17 +41,27 @@ class OtelInterceptor(
             f"RPC {client_call_details.method}", kind=SpanKind.CLIENT
         ) as span:
             # Prepare metadata for propagation
-            metadata = (
-                client_call_details.metadata[:] if client_call_details.metadata else []
+            orig_metadata = client_call_details.metadata
+            if orig_metadata:
+                # Avoid slicing by just converting to list if not already
+                if isinstance(orig_metadata, tuple):
+                    metadata = list(orig_metadata)
+                else:
+                    metadata = list(orig_metadata)
+            else:
+                metadata = []
+            span_ctx = span.get_span_context()
+            metadata.append(
+                (
+                    "chroma-traceid",
+                    _encode_trace_id(span_ctx.trace_id),
+                )
             )
-            metadata.extend(
-                [
-                    (
-                        "chroma-traceid",
-                        _encode_trace_id(span.get_span_context().trace_id),
-                    ),
-                    ("chroma-spanid", _encode_span_id(span.get_span_context().span_id)),
-                ]
+            metadata.append(
+                (
+                    "chroma-spanid",
+                    _encode_span_id(span_ctx.span_id),
+                )
             )
             # Update client call details with new metadata
             new_client_details = _ClientCallDetails(
@@ -64,13 +73,17 @@ class OtelInterceptor(
             try:
                 result = continuation(new_client_details, request_or_iterator)
                 # Set attributes based on the result
-                if hasattr(result, "details") and result.details():
-                    span.set_attribute("rpc.detail", result.details())
-                span.set_attribute("rpc.status_code", result.code().name.lower())
-                span.set_attribute("rpc.status_code_value", result.code().value[0])
+                # Reduce hasattr checks by reusing result.code()
+                code = result.code()
+                if hasattr(result, "details"):
+                    details = result.details()
+                    if details:
+                        span.set_attribute("rpc.detail", details)
+                span.set_attribute("rpc.status_code", code.name.lower())
+                span.set_attribute("rpc.status_code_value", code.value[0])
                 # Set span status based on gRPC call result
-                if result.code() != grpc.StatusCode.OK:
-                    span.set_status(StatusCode.ERROR, description=str(result.code()))
+                if code != grpc.StatusCode.OK:
+                    span.set_status(StatusCode.ERROR, description=str(code))
                 return result
             except Exception as e:
                 # Log exception details and re-raise
