@@ -166,10 +166,17 @@ class HuggingFaceEmbeddingServer(EmbeddingFunction[Documents]):
             self.api_key = api_key
 
         self._api_url = f"{url}"
-        self._session = httpx.Client()
 
-        if self.api_key is not None:
-            self._session.headers.update({"Authorization": f"Bearer {self.api_key}"})
+        cls = type(self)
+        if not hasattr(cls, "_client_cache"):
+            cls._client_cache = {}
+        client_key = self.api_key if self.api_key is not None else ""
+        if client_key not in cls._client_cache:
+            client = httpx.Client()
+            if self.api_key is not None:
+                client.headers.update({"Authorization": f"Bearer {self.api_key}"})
+            cls._client_cache[client_key] = client
+        self._session = cls._client_cache[client_key]
 
     def __call__(self, input: Documents) -> Embeddings:
         """
