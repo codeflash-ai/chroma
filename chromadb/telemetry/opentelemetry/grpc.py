@@ -15,7 +15,7 @@ class _ClientCallDetails(
 
 
 def _encode_span_id(span_id: int) -> str:
-    return binascii.hexlify(span_id.to_bytes(8, "big")).decode()
+    return span_id.to_bytes(8, "big").hex()
 
 
 def _encode_trace_id(trace_id: int) -> str:
