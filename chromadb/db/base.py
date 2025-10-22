@@ -1,14 +1,16 @@
-from typing import Any, Optional, Sequence, Tuple, Type
-from types import TracebackType
-from typing_extensions import Protocol, Self, Literal
 from abc import ABC, abstractmethod
+from itertools import count, islice
 from threading import local
-from overrides import override, EnforceOverrides
+from types import TracebackType
+from typing import Any, Optional, Sequence, Tuple, Type
+from uuid import UUID
+
 import pypika
 import pypika.queries
-from chromadb.config import System, Component
-from uuid import UUID
-from itertools import islice, count
+from overrides import EnforceOverrides, override
+from typing_extensions import Literal, Protocol, Self
+
+from chromadb.config import Component, System
 
 
 class Cursor(Protocol):
