@@ -33,9 +33,18 @@ def _singleton_tenant_database_if_applicable(
     if user_tenant and user_tenant != "*":
         tenant = user_tenant
     if user_databases:
-        user_databases_set = set(user_databases)
-        if len(user_databases_set) == 1 and "*" not in user_databases_set:
-            database = list(user_databases_set)[0]
+        unique_db = None
+        for db in user_databases:
+            if db == "*":
+                unique_db = None
+                break
+            if unique_db is None:
+                unique_db = db
+            elif db != unique_db:
+                unique_db = None
+                break
+        if unique_db is not None:
+            database = unique_db
     return tenant, database
 
 
@@ -65,14 +74,18 @@ def maybe_set_tenant_and_database(
         and new_tenant
         and new_tenant != user_provided_tenant
     ):
-        raise ChromaAuthError(f"Tenant {user_provided_tenant} does not match {new_tenant} from the server. Are you sure the tenant is correct?")
+        raise ChromaAuthError(
+            f"Tenant {user_provided_tenant} does not match {new_tenant} from the server. Are you sure the tenant is correct?"
+        )
     if (
         user_provided_database
         and user_provided_database != DEFAULT_DATABASE
         and new_database
         and new_database != user_provided_database
     ):
-        raise ChromaAuthError(f"Database {user_provided_database} does not match {new_database} from the server. Are you sure the database is correct?")
+        raise ChromaAuthError(
+            f"Database {user_provided_database} does not match {new_database} from the server. Are you sure the database is correct?"
+        )
 
     if (
         not user_provided_tenant or user_provided_tenant == DEFAULT_TENANT
