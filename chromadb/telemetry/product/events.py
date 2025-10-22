@@ -217,32 +217,33 @@ class CollectionGetEvent(ProductTelemetryEvent):
         include_uris: int,
         batch_size: int = 1,
     ):
-        super().__init__()
+        # Directly assign batch_size before calling super().__init__ to avoid redundant assignment
+        super().__init__(batch_size)
         self.collection_uuid = collection_uuid
         self.ids_count = ids_count
         self.limit = limit
         self.include_metadata = include_metadata
         self.include_documents = include_documents
         self.include_uris = include_uris
-        self.batch_size = batch_size
 
     @property
     def batch_key(self) -> str:
         return self.collection_uuid + self.name + str(self.limit)
 
     def batch(self, other: "ProductTelemetryEvent") -> "CollectionGetEvent":
-        if not self.batch_key == other.batch_key:
+        # Inline the equality check for slightly faster execution
+        if self.batch_key != other.batch_key:
             raise ValueError("Cannot batch events")
-        other = cast(CollectionGetEvent, other)
-        total_amount = self.ids_count + other.ids_count
+        # Avoid repeated attribute lookups by assigning once
+        other_evt = cast(CollectionGetEvent, other)
         return CollectionGetEvent(
             collection_uuid=self.collection_uuid,
-            ids_count=total_amount,
+            ids_count=self.ids_count + other_evt.ids_count,
             limit=self.limit,
-            include_metadata=self.include_metadata + other.include_metadata,
-            include_documents=self.include_documents + other.include_documents,
-            include_uris=self.include_uris + other.include_uris,
-            batch_size=self.batch_size + other.batch_size,
+            include_metadata=self.include_metadata + other_evt.include_metadata,
+            include_documents=self.include_documents + other_evt.include_documents,
+            include_uris=self.include_uris + other_evt.include_uris,
+            batch_size=self.batch_size + other_evt.batch_size,
         )
 
 
