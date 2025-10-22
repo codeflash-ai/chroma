@@ -55,7 +55,14 @@ class ChromaLangchainEmbeddingFunction(EmbeddingFunction[Embeddable]):
         self.embedding_function = embedding_function
 
         # Store the class name for serialization
-        self._embedding_function_class = embedding_function.__class__.__name__
+        # Cache the static configuration dictionary for efficient get_config
+        class_name = embedding_function.__class__.__name__
+        # Precompute and store the config dictionary as it's static for the life of this instance
+        self._config: Dict[str, Any] = {
+            "embedding_function_class": class_name,
+            "note": "This is a placeholder config. You will need to recreate the langchain embedding function.",
+        }
+        self._embedding_function_class = class_name
 
     def embed_documents(self, documents: Sequence[str]) -> List[List[float]]:
         """
@@ -144,10 +151,8 @@ class ChromaLangchainEmbeddingFunction(EmbeddingFunction[Embeddable]):
         )
 
     def get_config(self) -> Dict[str, Any]:
-        return {
-            "embedding_function_class": self._embedding_function_class,
-            "note": "This is a placeholder config. You will need to recreate the langchain embedding function.",
-        }
+        # Return a reference to the pre-built config dictionary
+        return self._config
 
     def validate_config_update(
         self, old_config: Dict[str, Any], new_config: Dict[str, Any]
