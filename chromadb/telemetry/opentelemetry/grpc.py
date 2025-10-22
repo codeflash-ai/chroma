@@ -3,6 +3,7 @@ import collections
 
 import grpc
 from opentelemetry.trace import StatusCode, SpanKind
+from chromadb.telemetry.opentelemetry import tracer
 
 
 class _ClientCallDetails(
@@ -34,26 +35,23 @@ class OtelInterceptor(
     grpc.StreamStreamClientInterceptor,
 ):
     def _intercept_call(self, continuation, client_call_details, request_or_iterator):
-        from chromadb.telemetry.opentelemetry import tracer
-
         if tracer is None:
+            # Fast path: tracer is not enabled, no span setup
             return continuation(client_call_details, request_or_iterator)
         with tracer.start_as_current_span(
             f"RPC {client_call_details.method}", kind=SpanKind.CLIENT
         ) as span:
             # Prepare metadata for propagation
-            metadata = (
-                client_call_details.metadata[:] if client_call_details.metadata else []
-            )
-            metadata.extend(
-                [
-                    (
-                        "chroma-traceid",
-                        _encode_trace_id(span.get_span_context().trace_id),
-                    ),
-                    ("chroma-spanid", _encode_span_id(span.get_span_context().span_id)),
-                ]
-            )
+            orig_metadata = client_call_details.metadata
+            if orig_metadata:
+                # Avoid unnecessary copying if metadata is immutable and empty
+                metadata = list(orig_metadata)
+            else:
+                metadata = []
+            # Only access context once for performance
+            ctx = span.get_span_context()
+            metadata.append(("chroma-traceid", _encode_trace_id(ctx.trace_id)))
+            metadata.append(("chroma-spanid", _encode_span_id(ctx.span_id)))
             # Update client call details with new metadata
             new_client_details = _ClientCallDetails(
                 client_call_details.method,
@@ -66,11 +64,12 @@ class OtelInterceptor(
                 # Set attributes based on the result
                 if hasattr(result, "details") and result.details():
                     span.set_attribute("rpc.detail", result.details())
-                span.set_attribute("rpc.status_code", result.code().name.lower())
-                span.set_attribute("rpc.status_code_value", result.code().value[0])
+                code = result.code()
+                span.set_attribute("rpc.status_code", code.name.lower())
+                span.set_attribute("rpc.status_code_value", code.value[0])
                 # Set span status based on gRPC call result
-                if result.code() != grpc.StatusCode.OK:
-                    span.set_status(StatusCode.ERROR, description=str(result.code()))
+                if code != grpc.StatusCode.OK:
+                    span.set_status(StatusCode.ERROR, description=str(code))
                 return result
             except Exception as e:
                 # Log exception details and re-raise
