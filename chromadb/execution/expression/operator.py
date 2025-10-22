@@ -214,14 +214,14 @@ class Where:
     def __and__(self, other: "Where") -> "And":
         """Overload & operator for AND"""
         # If self is already an And, extend it
-        if isinstance(self, And):
+        if type(self) is And:
             # If other is also And, combine all conditions
-            if isinstance(other, And):
-                return And(self.conditions + other.conditions)
-            return And(self.conditions + [other])
+            if type(other) is And:
+                return And([*self.conditions, *other.conditions])
+            return And([*self.conditions, other])
         # If other is And, prepend self to it
-        elif isinstance(other, And):
-            return And([self] + other.conditions)
+        elif type(other) is And:
+            return And([self, *other.conditions])
         # Create new And with both conditions
         return And([self, other])
 
