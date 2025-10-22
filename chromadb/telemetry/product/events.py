@@ -180,21 +180,26 @@ class CollectionQueryEvent(ProductTelemetryEvent):
     def batch(self, other: "ProductTelemetryEvent") -> "CollectionQueryEvent":
         if not self.batch_key == other.batch_key:
             raise ValueError("Cannot batch events")
-        other = cast(CollectionQueryEvent, other)
-        total_amount = self.query_amount + other.query_amount
-        return CollectionQueryEvent(
-            collection_uuid=self.collection_uuid,
-            query_amount=total_amount,
-            filtered_ids_amount=self.filtered_ids_amount + other.filtered_ids_amount,
-            with_metadata_filter=self.with_metadata_filter + other.with_metadata_filter,
-            with_document_filter=self.with_document_filter + other.with_document_filter,
-            n_results=self.n_results + other.n_results,
-            include_metadatas=self.include_metadatas + other.include_metadatas,
-            include_documents=self.include_documents + other.include_documents,
-            include_uris=self.include_uris + other.include_uris,
-            include_distances=self.include_distances + other.include_distances,
-            batch_size=self.batch_size + other.batch_size,
+
+        # Fast local reference for cast avoids attribute lookup overhead in hot path
+        o = cast(CollectionQueryEvent, other)
+
+        # Avoid redundant lookup and call sites by precomputing all additions in a tuple
+        # (this allows the constructor call to be a single opcode, improves call site efficiency)
+        args = (
+            self.collection_uuid,
+            self.query_amount + o.query_amount,
+            self.filtered_ids_amount + o.filtered_ids_amount,
+            self.with_metadata_filter + o.with_metadata_filter,
+            self.with_document_filter + o.with_document_filter,
+            self.n_results + o.n_results,
+            self.include_metadatas + o.include_metadatas,
+            self.include_documents + o.include_documents,
+            self.include_uris + o.include_uris,
+            self.include_distances + o.include_distances,
+            self.batch_size + o.batch_size,
         )
+        return CollectionQueryEvent(*args)
 
 
 class CollectionGetEvent(ProductTelemetryEvent):
