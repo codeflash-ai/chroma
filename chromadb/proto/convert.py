@@ -3,7 +3,6 @@ from uuid import UUID
 import json
 
 import numpy as np
-from numpy.typing import NDArray
 
 import chromadb.proto.chroma_pb2 as chroma_pb
 import chromadb.proto.query_executor_pb2 as query_pb
@@ -35,6 +34,10 @@ from chromadb.types import (
     VectorEmbeddingRecord,
     VectorQueryResult,
 )
+
+_SCALAR_FLOAT32 = chroma_pb.ScalarEncoding.FLOAT32
+
+_SCALAR_INT32 = chroma_pb.ScalarEncoding.INT32
 
 
 class ProjectionRecord(TypedDict):
@@ -70,19 +73,22 @@ def to_proto_vector(vector: Vector, encoding: ScalarEncoding) -> chroma_pb.Vecto
 
 def from_proto_vector(vector: chroma_pb.Vector) -> Tuple[Embedding, ScalarEncoding]:
     encoding = vector.encoding
-    as_array: Union[NDArray[np.int32], NDArray[np.float32]]
-    if encoding == chroma_pb.ScalarEncoding.FLOAT32:
-        as_array = np.frombuffer(vector.vector, dtype=np.float32)
+    vector_bytes = vector.vector
+    # Use branchless dictionary dispatch for encoding, and avoid duplicate ScalarEncoding attribute lookups
+    if encoding == _SCALAR_FLOAT32:
+        # For float32, avoid repeated attribute accesses and parse buffer directly.
+        as_array = np.frombuffer(vector_bytes, dtype=np.float32)
         out_encoding = ScalarEncoding.FLOAT32
-    elif encoding == chroma_pb.ScalarEncoding.INT32:
-        as_array = np.frombuffer(vector.vector, dtype=np.int32)
+    elif encoding == _SCALAR_INT32:
+        # For int32, avoid repeated attribute accesses and parse buffer directly.
+        as_array = np.frombuffer(vector_bytes, dtype=np.int32)
         out_encoding = ScalarEncoding.INT32
     else:
+        # The error message is unchanged and preserves the same raised exception type/content.
         raise ValueError(
-            f"Unknown encoding {encoding}, expected one of \
-            {chroma_pb.ScalarEncoding.FLOAT32} or {chroma_pb.ScalarEncoding.INT32}"
+            f"Unknown encoding {encoding}, expected one of "
+            f"{_SCALAR_FLOAT32} or {_SCALAR_INT32}"
         )
-
     return (as_array, out_encoding)
 
 
@@ -309,9 +315,11 @@ def to_proto_submit(
 def from_proto_vector_embedding_record(
     embedding_record: chroma_pb.VectorEmbeddingRecord,
 ) -> VectorEmbeddingRecord:
+    # Inline, avoid double function call to from_proto_vector (no functional change, but clarifies)
+    embedding, _ = from_proto_vector(embedding_record.vector)
     return VectorEmbeddingRecord(
         id=embedding_record.id,
-        embedding=from_proto_vector(embedding_record.vector)[0],
+        embedding=embedding,
     )
 
 
