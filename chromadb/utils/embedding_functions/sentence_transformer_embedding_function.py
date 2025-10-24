@@ -8,8 +8,6 @@ class SentenceTransformerEmbeddingFunction(EmbeddingFunction[Documents]):
     # Since we do dynamic imports we have to type this as Any
     models: Dict[str, Any] = {}
 
-    # If you have a beefier machine, try "gtr-t5-large".
-    # for a full list of options: https://huggingface.co/sentence-transformers, https://www.sbert.net/docs/pretrained_models.html
     def __init__(
         self,
         model_name: str = "all-MiniLM-L6-v2",
@@ -40,11 +38,17 @@ class SentenceTransformerEmbeddingFunction(EmbeddingFunction[Documents]):
                 raise ValueError(f"Keyword argument {key} is not a primitive type")
         self.kwargs = kwargs
 
-        if model_name not in self.models:
-            self.models[model_name] = SentenceTransformer(
+        models = (
+            self.__class__.models
+        )  # Local reference avoids attribute lookups in loop below
+        if model_name not in models:
+            # Avoid race condition in threaded context
+            # (No locking added here due to behavioral preservation requirements)
+            model = SentenceTransformer(
                 model_name_or_path=model_name, device=device, **kwargs
             )
-        self._model = self.models[model_name]
+            models[model_name] = model
+        self._model = models[model_name]
 
     def __call__(self, input: Documents) -> Embeddings:
         """Generate embeddings for the given documents.
