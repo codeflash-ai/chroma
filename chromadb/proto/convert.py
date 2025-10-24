@@ -682,7 +682,11 @@ def from_proto_knn_projection_record(
 def from_proto_knn_batch_result(
     results: query_pb.KNNBatchResult,
 ) -> Sequence[Sequence[KNNProjectionRecord]]:
-    return [
-        [from_proto_knn_projection_record(record) for record in result.records]
-        for result in results.results
-    ]
+    results_list = []
+    for result in results.results:
+        records = result.records
+        result_records = []
+        for record in records:
+            result_records.append(from_proto_knn_projection_record(record))
+        results_list.append(result_records)
+    return results_list
