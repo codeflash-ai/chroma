@@ -36,6 +36,18 @@ from chromadb.types import (
     VectorQueryResult,
 )
 
+_VECTOR = chroma_pb.SegmentScope.VECTOR
+
+_METADATA = chroma_pb.SegmentScope.METADATA
+
+_RECORD = chroma_pb.SegmentScope.RECORD
+
+_SCOPE_MAP = {
+    _VECTOR: SegmentScope.VECTOR,
+    _METADATA: SegmentScope.METADATA,
+    _RECORD: SegmentScope.RECORD,
+}
+
 
 class ProjectionRecord(TypedDict):
     id: str
@@ -158,18 +170,23 @@ def from_proto_submit(
 
 
 def from_proto_segment(segment: chroma_pb.Segment) -> Segment:
+    # Avoid attribute lookups inside the constructor by pre-assigning variables
+    segment_id = segment.id
+    segment_type = segment.type
+    segment_scope = segment.scope
+    collection_id = segment.collection
+    has_metadata = segment.HasField("metadata")
+
+    # Avoid intermediate lists for file paths
+    file_paths_items = segment.file_paths.items()
+
     return Segment(
-        id=UUID(hex=segment.id),
-        type=segment.type,
-        scope=from_proto_segment_scope(segment.scope),
-        collection=UUID(hex=segment.collection),
-        metadata=from_proto_metadata(segment.metadata)
-        if segment.HasField("metadata")
-        else None,
-        file_paths={
-            name: [path for path in paths.paths]
-            for name, paths in segment.file_paths.items()
-        },
+        id=UUID(hex=segment_id),
+        type=segment_type,
+        scope=from_proto_segment_scope(segment_scope),
+        collection=UUID(hex=collection_id),
+        metadata=from_proto_metadata(segment.metadata) if has_metadata else None,
+        file_paths={name: list(paths.paths) for name, paths in file_paths_items},
     )
 
 
@@ -190,13 +207,9 @@ def to_proto_segment(segment: Segment) -> chroma_pb.Segment:
 
 
 def from_proto_segment_scope(segment_scope: chroma_pb.SegmentScope) -> SegmentScope:
-    if segment_scope == chroma_pb.SegmentScope.VECTOR:
-        return SegmentScope.VECTOR
-    elif segment_scope == chroma_pb.SegmentScope.METADATA:
-        return SegmentScope.METADATA
-    elif segment_scope == chroma_pb.SegmentScope.RECORD:
-        return SegmentScope.RECORD
-    else:
+    try:
+        return _SCOPE_MAP[segment_scope]
+    except KeyError:
         raise RuntimeError(f"Unknown segment scope {segment_scope}")
 
 
