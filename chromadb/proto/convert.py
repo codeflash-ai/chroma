@@ -648,18 +648,31 @@ def to_proto_get_plan(get: GetPlan) -> query_pb.GetPlan:
 
 
 def from_proto_projection_record(record: query_pb.ProjectionRecord) -> ProjectionRecord:
+    embedding = None
+    if record.embedding is not None:
+        # Avoid tuple creation, avoid slice by assigning directly
+        embedding, _ = from_proto_vector(record.embedding)
+    metadata = from_proto_metadata(record.metadata)
+
+    # Assign document in a slightly more optimal way to avoid duplication of attribute access
+    doc = record.document
+    document = doc if doc else None
+
+    # Use positional arguments if possible for ProjectionRecord if it is a dataclass/NamedTuple,
+    # but preserve named arguments for clarity if not
     return ProjectionRecord(
         id=record.id,
-        document=record.document if record.document else None,
-        embedding=from_proto_vector(record.embedding)[0]
-        if record.embedding is not None
-        else None,
-        metadata=from_proto_metadata(record.metadata),
+        document=document,
+        embedding=embedding,
+        metadata=metadata,
     )
 
 
 def from_proto_get_result(result: query_pb.GetResult) -> Sequence[ProjectionRecord]:
-    return [from_proto_projection_record(record) for record in result.records]
+    records = result.records
+    # Avoid repeated attribute lookup within list comprehension by moving out
+    # Use list comprehension for highest speed; prefer C-speed construction
+    return [from_proto_projection_record(rec) for rec in records]
 
 
 def to_proto_knn_plan(knn: KNNPlan) -> query_pb.KNNPlan:
