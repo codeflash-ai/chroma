@@ -172,9 +172,16 @@ def get_sql(
     information on parameterized queries in PyPika.
     """
 
-    _context.values = []
+    # Avoid repeated attribute assignment by using getattr and setdefault approach.
+    # Also avoid using global local directly.
+    values = _context.__dict__.setdefault("values", [])
+    values.clear()
     _context.generator = count(1)
     _context.formatstr = formatstr
+
+    # Localize values for get_sql, since this call dominates runtime profiling
     sql = query.get_sql()
-    params = tuple(_context.values)
+
+    # Direct construction of tuple, avoids indirect getattr lookup again
+    params = tuple(values)
     return sql, params
