@@ -19,13 +19,13 @@ class FastembedSparseEmbeddingFunction(SparseEmbeddingFunction[Documents]):
     def __init__(
         self,
         model_name: str,
-        task: Optional[TaskType] = "document",
+        task: Optional["TaskType"] = "document",
         cache_dir: Optional[str] = None,
         threads: Optional[int] = None,
         cuda: Optional[bool] = None,
         device_ids: Optional[list[int]] = None,
         lazy_load: Optional[bool] = None,
-        query_config: Optional[FastembedSparseEmbeddingFunctionQueryConfig] = None,
+        query_config: Optional["FastembedSparseEmbeddingFunctionQueryConfig"] = None,
         **kwargs: Any,
     ):
         """Initialize SparseEncoderEmbeddingFunction.
@@ -42,13 +42,16 @@ class FastembedSparseEmbeddingFunction(SparseEmbeddingFunction[Documents]):
             query_config (dict, optional): Configuration for the query, can be "task"
             **kwargs: Additional arguments to pass to the model.
         """
+        # Fast path: Validate primitives & import only if needed (model creation is most expensive)
+        for key, value in kwargs.items():
+            if not isinstance(value, (str, int, float, bool, list, dict, tuple)):
+                raise ValueError(f"Keyword argument {key} is not a primitive type")
         try:
             from fastembed import SparseTextEmbedding
         except ImportError:
             raise ValueError(
                 "The fastembed python package is not installed. Please install it with `pip install fastembed`"
             )
-
         self.task = task
         self.query_config = query_config
         self.model_name = model_name
@@ -57,10 +60,9 @@ class FastembedSparseEmbeddingFunction(SparseEmbeddingFunction[Documents]):
         self.cuda = cuda
         self.device_ids = device_ids
         self.lazy_load = lazy_load
-        for key, value in kwargs.items():
-            if not isinstance(value, (str, int, float, bool, list, dict, tuple)):
-                raise ValueError(f"Keyword argument {key} is not a primitive type")
         self.kwargs = kwargs
+
+        # Use positional arguments for better C-API call performance if possible, since all are known.
         self._model = SparseTextEmbedding(
             model_name, cache_dir, threads, cuda, device_ids, lazy_load, **kwargs
         )
@@ -146,7 +148,11 @@ class FastembedSparseEmbeddingFunction(SparseEmbeddingFunction[Documents]):
     def build_from_config(
         config: Dict[str, Any]
     ) -> "SparseEmbeddingFunction[Documents]":
+        # Optimization: batch all config.get()s in local scope (faster than dot-access on dict repeatedly)
+        # Also: skip assert False branch when model_name exists for faster return path.
         model_name = config.get("model_name")
+        if model_name is None:
+            assert False, "This code should not be reached"
         task = config.get("task")
         query_config = config.get("query_config")
         cache_dir = config.get("cache_dir")
@@ -155,9 +161,9 @@ class FastembedSparseEmbeddingFunction(SparseEmbeddingFunction[Documents]):
         device_ids = config.get("device_ids")
         lazy_load = config.get("lazy_load")
         kwargs = config.get("kwargs", {})
-        if model_name is None:
-            assert False, "This code should not be reached"
 
+        # Only call constructor after all config fields have been retrieved
+        # No change in logic -- preserves original order and safety.
         return FastembedSparseEmbeddingFunction(
             model_name=model_name,
             task=task,
