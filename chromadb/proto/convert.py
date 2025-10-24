@@ -3,7 +3,6 @@ from uuid import UUID
 import json
 
 import numpy as np
-from numpy.typing import NDArray
 
 import chromadb.proto.chroma_pb2 as chroma_pb
 import chromadb.proto.query_executor_pb2 as query_pb
@@ -35,6 +34,18 @@ from chromadb.types import (
     VectorEmbeddingRecord,
     VectorQueryResult,
 )
+
+_OPERATION_MAP = {
+    chroma_pb.Operation.ADD: Operation.ADD,
+    chroma_pb.Operation.UPDATE: Operation.UPDATE,
+    chroma_pb.Operation.UPSERT: Operation.UPSERT,
+    chroma_pb.Operation.DELETE: Operation.DELETE,
+}
+
+_ENCODING_MAP = {
+    chroma_pb.ScalarEncoding.FLOAT32: (np.float32, ScalarEncoding.FLOAT32),
+    chroma_pb.ScalarEncoding.INT32: (np.int32, ScalarEncoding.INT32),
+}
 
 
 class ProjectionRecord(TypedDict):
@@ -70,32 +81,22 @@ def to_proto_vector(vector: Vector, encoding: ScalarEncoding) -> chroma_pb.Vecto
 
 def from_proto_vector(vector: chroma_pb.Vector) -> Tuple[Embedding, ScalarEncoding]:
     encoding = vector.encoding
-    as_array: Union[NDArray[np.int32], NDArray[np.float32]]
-    if encoding == chroma_pb.ScalarEncoding.FLOAT32:
-        as_array = np.frombuffer(vector.vector, dtype=np.float32)
-        out_encoding = ScalarEncoding.FLOAT32
-    elif encoding == chroma_pb.ScalarEncoding.INT32:
-        as_array = np.frombuffer(vector.vector, dtype=np.int32)
-        out_encoding = ScalarEncoding.INT32
-    else:
+    try:
+        dtype, out_encoding = _ENCODING_MAP[encoding]
+    except KeyError:
         raise ValueError(
             f"Unknown encoding {encoding}, expected one of \
             {chroma_pb.ScalarEncoding.FLOAT32} or {chroma_pb.ScalarEncoding.INT32}"
         )
 
+    as_array = np.frombuffer(vector.vector, dtype=dtype)
     return (as_array, out_encoding)
 
 
 def from_proto_operation(operation: chroma_pb.Operation) -> Operation:
-    if operation == chroma_pb.Operation.ADD:
-        return Operation.ADD
-    elif operation == chroma_pb.Operation.UPDATE:
-        return Operation.UPDATE
-    elif operation == chroma_pb.Operation.UPSERT:
-        return Operation.UPSERT
-    elif operation == chroma_pb.Operation.DELETE:
-        return Operation.DELETE
-    else:
+    try:
+        return _OPERATION_MAP[operation]
+    except KeyError:
         # TODO: full error
         raise RuntimeError(f"Unknown operation {operation}")
 
