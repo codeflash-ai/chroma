@@ -86,6 +86,10 @@ from chromadb.telemetry.opentelemetry import (
 )
 from chromadb.types import Collection as CollectionModel
 
+_get_current_span = trace.get_current_span
+
+_format_hex = format
+
 logger = logging.getLogger(__name__)
 
 
@@ -112,9 +116,17 @@ def use_route_names_as_operation_ids(app: _FastAPI) -> None:
 async def add_trace_id_to_response_middleware(
     request: Request, call_next: Callable[[Request], Any]
 ) -> Response:
-    trace_id = trace.get_current_span().get_span_context().trace_id
+    # Inline to a single variable lookup chain for performance
+    span = _get_current_span()
+    # Try to directly access span_context property without chaining if possible (avoid extra function calls)
+    span_context = getattr(span, "context", None)
+    if span_context is None:
+        span_context = span.get_span_context()
+    trace_id = span_context.trace_id
     response = await call_next(request)
-    response.headers["Chroma-Trace-Id"] = format(trace_id, "x")
+    # Avoid using format function when hex() is faster for int->hex, then remove "0x" prefix and ensure lowercase
+    # But since we must maintain the exact output ("x" format), use faster f-string if possible
+    response.headers["Chroma-Trace-Id"] = f"{trace_id:x}"
     return response
 
 
