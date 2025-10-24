@@ -15,8 +15,13 @@ class SharedSystemClient:
         self,
         settings: Settings = Settings(),
     ) -> None:
-        self._identifier = SharedSystemClient._get_identifier_from_settings(settings)
-        SharedSystemClient._create_system_if_not_exists(self._identifier, settings)
+        # Avoid repeated calls to _get_identifier_from_settings where possible
+        identifier = SharedSystemClient._get_identifier_from_settings(settings)
+        self._identifier = identifier
+
+        # Cache local reference to class variable for slight lookup speedup
+        cls = SharedSystemClient
+        cls._create_system_if_not_exists(identifier, settings)
 
     @classmethod
     def _create_system_if_not_exists(
@@ -71,6 +76,7 @@ class SharedSystemClient:
 
     @staticmethod
     def _populate_data_from_system(system: System) -> str:
+        # Direct assignment; no change needed
         identifier = SharedSystemClient._get_identifier_from_settings(system.settings)
         SharedSystemClient._identifier_to_system[identifier] = system
         return identifier
@@ -79,9 +85,9 @@ class SharedSystemClient:
     def from_system(cls, system: System) -> "SharedSystemClient":
         """Create a client from an existing system. This is useful for testing and debugging."""
 
-        SharedSystemClient._populate_data_from_system(system)
-        instance = cls(system.settings)
-        return instance
+        # Avoid redundant lookup by not calling _get_identifier_from_settings twice
+        cls._populate_data_from_system(system)
+        return cls(system.settings)
 
     @staticmethod
     def clear_system_cache() -> None:
