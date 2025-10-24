@@ -458,9 +458,19 @@ class System(Component):
     def components(self) -> Iterable[Component]:
         """Return the full set of all components and their dependencies in dependency
         order."""
+        # Optimize dependencies gathering to avoid repeated function calls and argument unpacking
         sorter: TopologicalSorter[Component] = TopologicalSorter()
-        for component in self._instances.values():
-            sorter.add(component, *component.dependencies())
+
+        # Preload dependencies to reduce repeated method calls and argument expansion
+        add = sorter.add
+        instances_values = self._instances.values()
+        # Gather dependencies once per component
+        for component in instances_values:
+            deps = component.dependencies()
+            if deps:
+                add(component, *deps)
+            else:
+                add(component)
 
         return sorter.static_order()
 
