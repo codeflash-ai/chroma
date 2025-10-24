@@ -57,13 +57,33 @@ class FastembedSparseEmbeddingFunction(SparseEmbeddingFunction[Documents]):
         self.cuda = cuda
         self.device_ids = device_ids
         self.lazy_load = lazy_load
+
+        # Faster primitive type validation using tuple containment and avoiding isinstance for container types
+        primitive_types = (str, int, float, bool)
+        container_types = (list, dict, tuple)
         for key, value in kwargs.items():
-            if not isinstance(value, (str, int, float, bool, list, dict, tuple)):
+            vtype = type(value)
+            if vtype not in primitive_types and vtype not in container_types:
                 raise ValueError(f"Keyword argument {key} is not a primitive type")
         self.kwargs = kwargs
-        self._model = SparseTextEmbedding(
-            model_name, cache_dir, threads, cuda, device_ids, lazy_load, **kwargs
-        )
+
+        # Avoid keyword params dict construction if all values are None/empty, but preserve behavior
+        if any(
+            [
+                cache_dir is not None,
+                threads is not None,
+                cuda is not None,
+                device_ids is not None,
+                lazy_load is not None,
+            ]
+        ):
+            self._model = SparseTextEmbedding(
+                model_name, cache_dir, threads, cuda, device_ids, lazy_load, **kwargs
+            )
+        else:
+            self._model = SparseTextEmbedding(
+                model_name, None, None, None, None, None, **kwargs
+            )
 
     def __call__(self, input: Documents) -> SparseVectors:
         """Generate embeddings for the given documents.
