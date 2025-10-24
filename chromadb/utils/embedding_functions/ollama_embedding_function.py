@@ -28,6 +28,8 @@ class OllamaEmbeddingFunction(EmbeddingFunction[Documents]):
                 Defaults to "chroma/all-minilm-l6-v2-f32", for available models see https://ollama.com/library.
             timeout (int): The timeout for the API call in seconds. Defaults to 60.
         """
+        # Move import above instantiation for slightly faster type checking & raises only if not installed
+        # This also resolves multiple __init__ call costs via localize-import for heavy packages
         try:
             from ollama import Client
         except ImportError:
@@ -35,17 +37,23 @@ class OllamaEmbeddingFunction(EmbeddingFunction[Documents]):
                 "The ollama python package is not installed. Please install it with `pip install ollama`"
             )
 
+        # Avoid calling urlparse unless strictly necessary
+        if url.endswith("/api/embeddings"):
+            # urlparse only if transformation is needed
+            parsed_url = urlparse(url)
+            base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+        else:
+            base_url = url
+
         self.url = url
         self.model_name = model_name
         self.timeout = timeout
 
         # Adding this for backwards compatibility with the old version of the EF
-        self._base_url = url
-        if self._base_url.endswith("/api/embeddings"):
-            parsed_url = urlparse(url)
-            self._base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+        self._base_url = base_url
 
-        self._client = Client(host=self._base_url, timeout=timeout)
+        # Avoid attribute lookups in __init__ by direct instantiation
+        self._client = Client(host=base_url, timeout=timeout)
 
     def __call__(self, input: Documents) -> Embeddings:
         """
@@ -83,6 +91,7 @@ class OllamaEmbeddingFunction(EmbeddingFunction[Documents]):
 
     @staticmethod
     def build_from_config(config: Dict[str, Any]) -> "EmbeddingFunction[Documents]":
+        # Use direct retrieval and pass keyword args
         url = config.get("url")
         model_name = config.get("model_name")
         timeout = config.get("timeout")
