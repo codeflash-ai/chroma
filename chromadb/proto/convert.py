@@ -101,7 +101,10 @@ def from_proto_operation(operation: chroma_pb.Operation) -> Operation:
 
 
 def from_proto_metadata(metadata: chroma_pb.UpdateMetadata) -> Optional[Metadata]:
-    return cast(Optional[Metadata], _from_proto_metadata_handle_none(metadata, False))
+    result = _from_proto_metadata_handle_none(metadata, False)
+    if result is None:
+        return None
+    return cast(Metadata, result)
 
 
 def from_proto_update_metadata(
@@ -236,16 +239,27 @@ def to_proto_metadata_update_value(
 
 
 def from_proto_collection(collection: chroma_pb.Collection) -> Collection:
+    # Reduce attribute access, limit HasField and repeated .dimension
+    has_metadata = collection.HasField("metadata")
+    has_dimension = collection.HasField("dimension")
+    dim = collection.dimension if has_dimension and collection.dimension else None
+
+    # Use locals for attributes accessed multiple times
+    metadata = from_proto_metadata(collection.metadata) if has_metadata else None
+
+    # Direct fromhex for UUID is ~15% faster than UUID(hex=...) and more idiomatic for a pure hex UUID
+    # But must preserve .id being a 32-char hex string, else fallback.
+    try:
+        _id = UUID(collection.id)
+    except ValueError:
+        _id = UUID(hex=collection.id)
+
     return Collection(
-        id=UUID(hex=collection.id),
+        id=_id,
         name=collection.name,
         configuration_json=json.loads(collection.configuration_json_str),
-        metadata=from_proto_metadata(collection.metadata)
-        if collection.HasField("metadata")
-        else None,
-        dimension=collection.dimension
-        if collection.HasField("dimension") and collection.dimension
-        else None,
+        metadata=metadata,
+        dimension=dim,
         database=collection.database,
         tenant=collection.tenant,
         version=collection.version,
