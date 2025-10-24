@@ -19,13 +19,13 @@ class FastembedSparseEmbeddingFunction(SparseEmbeddingFunction[Documents]):
     def __init__(
         self,
         model_name: str,
-        task: Optional[TaskType] = "document",
+        task: Optional["TaskType"] = "document",
         cache_dir: Optional[str] = None,
         threads: Optional[int] = None,
         cuda: Optional[bool] = None,
         device_ids: Optional[list[int]] = None,
         lazy_load: Optional[bool] = None,
-        query_config: Optional[FastembedSparseEmbeddingFunctionQueryConfig] = None,
+        query_config: Optional["FastembedSparseEmbeddingFunctionQueryConfig"] = None,
         **kwargs: Any,
     ):
         """Initialize SparseEncoderEmbeddingFunction.
@@ -42,13 +42,16 @@ class FastembedSparseEmbeddingFunction(SparseEmbeddingFunction[Documents]):
             query_config (dict, optional): Configuration for the query, can be "task"
             **kwargs: Additional arguments to pass to the model.
         """
-        try:
-            from fastembed import SparseTextEmbedding
-        except ImportError:
+        # Delay import until after input validation to reduce import overhead if exceptions are raised early
+        invalid_kwargs = [
+            key
+            for key, value in kwargs.items()
+            if not isinstance(value, (str, int, float, bool, list, dict, tuple))
+        ]
+        if invalid_kwargs:
             raise ValueError(
-                "The fastembed python package is not installed. Please install it with `pip install fastembed`"
+                f"Keyword argument(s) {', '.join(invalid_kwargs)} are not a primitive type"
             )
-
         self.task = task
         self.query_config = query_config
         self.model_name = model_name
@@ -57,10 +60,15 @@ class FastembedSparseEmbeddingFunction(SparseEmbeddingFunction[Documents]):
         self.cuda = cuda
         self.device_ids = device_ids
         self.lazy_load = lazy_load
-        for key, value in kwargs.items():
-            if not isinstance(value, (str, int, float, bool, list, dict, tuple)):
-                raise ValueError(f"Keyword argument {key} is not a primitive type")
         self.kwargs = kwargs
+        try:
+            from fastembed import SparseTextEmbedding
+        except ImportError:
+            raise ValueError(
+                "The fastembed python package is not installed. Please install it with `pip install fastembed`"
+            )
+
+        # Argument unpacking is potentially expensive; only done after pre-validation above
         self._model = SparseTextEmbedding(
             model_name, cache_dir, threads, cuda, device_ids, lazy_load, **kwargs
         )
