@@ -466,17 +466,17 @@ class UpdateHNSWConfiguration(TypedDict, total=False):
 def json_to_update_hnsw_configuration(
     json_map: Dict[str, Any]
 ) -> UpdateHNSWConfiguration:
-    config: UpdateHNSWConfiguration = {}
-    if "ef_search" in json_map:
-        config["ef_search"] = json_map["ef_search"]
-    if "num_threads" in json_map:
-        config["num_threads"] = json_map["num_threads"]
-    if "batch_size" in json_map:
-        config["batch_size"] = json_map["batch_size"]
-    if "sync_threshold" in json_map:
-        config["sync_threshold"] = json_map["sync_threshold"]
-    if "resize_factor" in json_map:
-        config["resize_factor"] = json_map["resize_factor"]
+    # Extract all required keys efficiently in a single loop over the relevant fields
+    config: "UpdateHNSWConfiguration" = {}
+    for key in (
+        "ef_search",
+        "num_threads",
+        "batch_size",
+        "sync_threshold",
+        "resize_factor",
+    ):
+        if key in json_map:
+            config[key] = json_map[key]
     return config
 
 
@@ -513,10 +513,12 @@ def update_collection_configuration_from_legacy_collection_metadata(
         "hnsw:sync_threshold": "sync_threshold",
         "hnsw:resize_factor": "resize_factor",
     }
-    json_map = {}
-    for name, value in metadata.items():
-        if name in old_to_new:
-            json_map[old_to_new[name]] = value
+    # Use dictionary comprehension for faster and more concise mapping
+    json_map = {
+        new_key: metadata[old_key]
+        for old_key, new_key in old_to_new.items()
+        if old_key in metadata
+    }
     hnsw_config = json_to_update_hnsw_configuration(json_map)
     return UpdateCollectionConfiguration(hnsw=hnsw_config)
 
