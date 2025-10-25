@@ -488,11 +488,11 @@ class UpdateSpannConfiguration(TypedDict, total=False):
 def json_to_update_spann_configuration(
     json_map: Dict[str, Any]
 ) -> UpdateSpannConfiguration:
-    config: UpdateSpannConfiguration = {}
-    if "search_nprobe" in json_map:
-        config["search_nprobe"] = json_map["search_nprobe"]
-    if "ef_search" in json_map:
-        config["ef_search"] = json_map["ef_search"]
+    # Directly use dictionary comprehension for faster execution than multiple 'if' checks
+    config: "UpdateSpannConfiguration" = {}
+    for key in ("search_nprobe", "ef_search"):
+        if key in json_map:
+            config[key] = json_map[key]
     return config
 
 
