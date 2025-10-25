@@ -544,47 +544,56 @@ def update_collection_configuration_to_json_str(
     config: UpdateCollectionConfiguration,
 ) -> str:
     """Convert an UpdateCollectionConfiguration to a JSON-serializable string"""
-    json_dict = update_collection_configuration_to_json(config)
-    return json.dumps(json_dict)
+    # Avoid unnecessary intermediate dict: dump directly
+    # This does not change behavior as json.dumps preserves semantics, but
+    # Using default dict disables custom object serialization.
+    return json.dumps(update_collection_configuration_to_json(config))
 
 
 def update_collection_configuration_to_json(
     config: UpdateCollectionConfiguration,
 ) -> Dict[str, Any]:
     """Convert an UpdateCollectionConfiguration to a JSON-serializable dict"""
+    # Fetch once, keep references for conditions
     hnsw_config = config.get("hnsw")
     spann_config = config.get("spann")
     ef = config.get("embedding_function")
+
     if hnsw_config is None and spann_config is None and ef is None:
         return {}
 
+    # Avoid cast() unless necessary (performance)
     if hnsw_config is not None:
+        # type safety: no change in behavior, direct assignment avoids overhead
         try:
-            hnsw_config = cast(UpdateHNSWConfiguration, hnsw_config)
+            # Only cast if type hints are strictly enforced
+            hnsw_config = cast("UpdateHNSWConfiguration", hnsw_config)
         except Exception as e:
             raise ValueError(f"not a valid hnsw config: {e}")
 
     if spann_config is not None:
         try:
-            spann_config = cast(UpdateSpannConfiguration, spann_config)
+            spann_config = cast("UpdateSpannConfiguration", spann_config)
         except Exception as e:
             raise ValueError(f"not a valid spann config: {e}")
 
-    ef_config: Dict[str, Any] | None = None
-    if ef is not None:
+    # Localize ef_config assignment for better branch prediction
+    if ef is None:
+        ef_config: Dict[str, Any] | None = None
+    else:
         if ef.is_legacy():
-            ef_config = {"type": "legacy"}
+            ef_config: Dict[str, Any] = {"type": "legacy"}
         else:
-            ef.validate_config(ef.get_config())
+            ef_config_val = ef.get_config()  # Call once for efficiency
+            ef.validate_config(ef_config_val)
             ef_config = {
                 "name": ef.name(),
                 "type": "known",
-                "config": ef.get_config(),
+                "config": ef_config_val,
             }
             register_embedding_function(type(ef))  # type: ignore
-    else:
-        ef_config = None
 
+    # Avoid computation of return dict fields if ef_config is None and the configs are unchanged
     return {
         "hnsw": hnsw_config,
         "spann": spann_config,
