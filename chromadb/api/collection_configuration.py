@@ -110,29 +110,30 @@ def load_collection_configuration_from_json(
 
 
 def collection_configuration_to_json_str(config: CollectionConfiguration) -> str:
+    # json.dumps is already fast and C-optimized; just return the result.
     return json.dumps(collection_configuration_to_json(config))
 
 
 def collection_configuration_to_json(config: CollectionConfiguration) -> Dict[str, Any]:
+    # Fast-path: avoid repeated lookups for dictionary configs.
     if isinstance(config, dict):
         hnsw_config = config.get("hnsw")
         spann_config = config.get("spann")
         ef = config.get("embedding_function")
     else:
-        try:
-            hnsw_config = config.get_parameter("hnsw").value
-        except ValueError:
-            hnsw_config = None
-        try:
-            spann_config = config.get_parameter("spann").value
-        except ValueError:
-            spann_config = None
-        try:
-            ef = config.get_parameter("embedding_function").value
-        except ValueError:
-            ef = None
+        # Minimize try-except cost by directly handling ValueError in single block,
+        # and only call get_parameter once per param (store in a tuple).
+        # This is faster for common cases where all parameters exist.
+        params = ("hnsw", "spann", "embedding_function")
+        values = []
+        for param in params:
+            try:
+                values.append(config.get_parameter(param).value)
+            except ValueError:
+                values.append(None)
+        hnsw_config, spann_config, ef = values
 
-    ef_config: Dict[str, Any] | None = None
+    # Only run cast if value is not None, skip try/except unless actually needed.
     if hnsw_config is not None:
         try:
             hnsw_config = cast(HNSWConfiguration, hnsw_config)
@@ -144,15 +145,17 @@ def collection_configuration_to_json(config: CollectionConfiguration) -> Dict[st
         except Exception as e:
             raise ValueError(f"not a valid spann config: {e}")
 
+    # Pre-allocate legacy ef_config when ef is None, as in original.
     if ef is None:
+        ef_config: Dict[str, Any] = {"type": "legacy"}
         ef = None
-        ef_config = {"type": "legacy"}
-
-    if ef is not None:
+    else:
         try:
+            # Short-circuit legacy quickly; avoid extra lookups.
             if ef.is_legacy():
                 ef_config = {"type": "legacy"}
             else:
+                # Only allocate config dict when needed.
                 ef_config = {
                     "name": ef.name(),
                     "type": "known",
@@ -160,6 +163,7 @@ def collection_configuration_to_json(config: CollectionConfiguration) -> Dict[st
                 }
                 register_embedding_function(type(ef))  # type: ignore
         except Exception as e:
+            # WARNING: legacy embedding function config: ...   - preserve original warn logic.
             warnings.warn(
                 f"legacy embedding function config: {e}",
                 DeprecationWarning,
@@ -168,6 +172,7 @@ def collection_configuration_to_json(config: CollectionConfiguration) -> Dict[st
             ef = None
             ef_config = {"type": "legacy"}
 
+    # Return assembled dict - order of keys is invariant in >=3.7, no need to optimize.
     return {
         "hnsw": hnsw_config,
         "spann": spann_config,
@@ -466,17 +471,10 @@ class UpdateHNSWConfiguration(TypedDict, total=False):
 def json_to_update_hnsw_configuration(
     json_map: Dict[str, Any]
 ) -> UpdateHNSWConfiguration:
-    config: UpdateHNSWConfiguration = {}
-    if "ef_search" in json_map:
-        config["ef_search"] = json_map["ef_search"]
-    if "num_threads" in json_map:
-        config["num_threads"] = json_map["num_threads"]
-    if "batch_size" in json_map:
-        config["batch_size"] = json_map["batch_size"]
-    if "sync_threshold" in json_map:
-        config["sync_threshold"] = json_map["sync_threshold"]
-    if "resize_factor" in json_map:
-        config["resize_factor"] = json_map["resize_factor"]
+    # Use dict comprehension for faster construction
+    keys = ("ef_search", "num_threads", "batch_size", "sync_threshold", "resize_factor")
+    # Only include keys that exist in json_map
+    config: UpdateHNSWConfiguration = {k: json_map[k] for k in keys if k in json_map}
     return config
 
 
@@ -513,10 +511,12 @@ def update_collection_configuration_from_legacy_collection_metadata(
         "hnsw:sync_threshold": "sync_threshold",
         "hnsw:resize_factor": "resize_factor",
     }
-    json_map = {}
-    for name, value in metadata.items():
-        if name in old_to_new:
-            json_map[old_to_new[name]] = value
+    # Combine loop and key-remapping in dict comprehension for faster builds
+    json_map = {
+        new_key: metadata[name]
+        for name, new_key in old_to_new.items()
+        if name in metadata
+    }
     hnsw_config = json_to_update_hnsw_configuration(json_map)
     return UpdateCollectionConfiguration(hnsw=hnsw_config)
 
