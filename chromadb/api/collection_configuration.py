@@ -763,12 +763,14 @@ def validate_embedding_function_conflict_on_create(
     # If not, there's a conflict
     # ef is by default "default" if not provided, so ignore that case.
     if embedding_function is not None and configuration_ef is not None:
+        embedding_function_name = embedding_function.name()
+        configuration_ef_name = configuration_ef.name()
         if (
-            embedding_function.name() != "default"
-            and embedding_function.name() != configuration_ef.name()
+            embedding_function_name != "default"
+            and embedding_function_name != configuration_ef_name
         ):
             raise ValueError(
-                f"Multiple embedding functions provided. Please provide only one. Embedding function conflict: {embedding_function.name()} vs {configuration_ef.name()}"
+                f"Multiple embedding functions provided. Please provide only one. Embedding function conflict: {embedding_function_name} vs {configuration_ef_name}"
             )
     return None
 
