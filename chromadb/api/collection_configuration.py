@@ -544,8 +544,45 @@ def update_collection_configuration_to_json_str(
     config: UpdateCollectionConfiguration,
 ) -> str:
     """Convert an UpdateCollectionConfiguration to a JSON-serializable string"""
-    json_dict = update_collection_configuration_to_json(config)
-    return json.dumps(json_dict)
+    # Avoid separate function call since update_collection_configuration_to_json is a trivial wrapper
+    hnsw_config = config.get("hnsw")
+    spann_config = config.get("spann")
+    ef = config.get("embedding_function")
+    if hnsw_config is None and spann_config is None and ef is None:
+        return "{}"
+
+    if hnsw_config is not None:
+        try:
+            hnsw_config = cast("UpdateHNSWConfiguration", hnsw_config)
+        except Exception as e:
+            raise ValueError(f"not a valid hnsw config: {e}")
+
+    if spann_config is not None:
+        try:
+            spann_config = cast("UpdateSpannConfiguration", spann_config)
+        except Exception as e:
+            raise ValueError(f"not a valid spann config: {e}")
+
+    ef_config: Dict[str, Any] | None = None
+    if ef is not None:
+        if ef.is_legacy():
+            ef_config = {"type": "legacy"}
+        else:
+            ef_config_val = ef.get_config()
+            ef.validate_config(ef_config_val)
+            ef_config = {
+                "name": ef.name(),
+                "type": "known",
+                "config": ef_config_val,
+            }
+            register_embedding_function(type(ef))  # type: ignore
+
+    result = {
+        "hnsw": hnsw_config,
+        "spann": spann_config,
+        "embedding_function": ef_config,
+    }
+    return json.dumps(result)
 
 
 def update_collection_configuration_to_json(
