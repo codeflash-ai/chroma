@@ -275,10 +275,11 @@ def create_collection_configuration_from_legacy_metadata_dict(
         "hnsw:sync_threshold": "sync_threshold",
         "hnsw:resize_factor": "resize_factor",
     }
-    json_map = {}
-    for name, value in metadata.items():
-        if name in old_to_new:
-            json_map[old_to_new[name]] = value
+    json_map = {
+        new_name: metadata[old_name]
+        for old_name, new_name in old_to_new.items()
+        if old_name in metadata
+    }
     hnsw_config = json_to_create_hnsw_configuration(json_map)
     hnsw_config = populate_create_hnsw_defaults(hnsw_config)
 
