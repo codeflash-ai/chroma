@@ -864,7 +864,11 @@ class Rank:
 
     def __sub__(self, other: Union["Rank", float, int]) -> "Sub":
         """Subtraction: rank1 - rank2 or rank - value"""
-        other_rank = Val(other) if isinstance(other, (int, float)) else other
+        # Optimize isinstance check tuple construction
+        if isinstance(other, int) or isinstance(other, float):
+            other_rank = Val(other)
+        else:
+            other_rank = other
         return Sub(self, other_rank)
 
     def __rsub__(self, other: Union[float, int]) -> "Sub":
