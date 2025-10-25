@@ -190,12 +190,14 @@ class ConfigurationInternal(JSONSerializable["ConfigurationInternal"]):
     @override
     def to_json(self) -> Dict[str, Any]:
         """Returns the JSON compatible dictionary representation of the configuration."""
-        json_dict = {
-            name: parameter.value.to_json()
-            if isinstance(parameter.value, ConfigurationInternal)
-            else parameter.value
-            for name, parameter in self.parameter_map.items()
-        }
+        parameter_map = self.parameter_map  # Localize for lookup speed
+        json_dict = {}
+        for name, parameter in parameter_map.items():
+            val = parameter.value
+            if isinstance(val, ConfigurationInternal):
+                json_dict[name] = val.to_json()
+            else:
+                json_dict[name] = val
         # What kind of configuration is this?
         json_dict["_type"] = self.__class__.__name__
         return json_dict
