@@ -660,14 +660,10 @@ def overwrite_spann_configuration(
 ) -> SpannConfiguration:
     """Overwrite a SpannConfiguration with a new configuration"""
     result = dict(existing_spann_config)
-    update_fields = [
-        "search_nprobe",
-        "ef_search",
-    ]
-
-    for field in update_fields:
-        if field in update_spann_config:
-            result[field] = update_spann_config[field]  # type: ignore
+    if "search_nprobe" in update_spann_config:
+        result["search_nprobe"] = update_spann_config["search_nprobe"]  # type: ignore
+    if "ef_search" in update_spann_config:
+        result["ef_search"] = update_spann_config["ef_search"]  # type: ignore
 
     return cast(SpannConfiguration, result)
 
