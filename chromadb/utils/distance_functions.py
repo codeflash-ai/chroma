@@ -29,4 +29,4 @@ def cosine(x: Vector, y: Vector) -> float:
 
 
 def ip(x: Vector, y: Vector) -> float:
-    return cast(float, (1.0 - np.dot(x, y)).item())
+    return cast(float, 1.0 - np.dot(x, y).item())
