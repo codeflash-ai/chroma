@@ -785,12 +785,14 @@ def validate_embedding_function_conflict_on_get(
     and collection configuration.
     """
     if persisted_ef_config is not None and embedding_function is not None:
+        embedding_function_name = embedding_function.name()
+        persisted_name = persisted_ef_config.get("name")
         if (
-            embedding_function.name() != "default"
-            and persisted_ef_config.get("name") is not None
-            and persisted_ef_config.get("name") != embedding_function.name()
+            embedding_function_name != "default"
+            and persisted_name is not None
+            and persisted_name != embedding_function_name
         ):
             raise ValueError(
-                f"An embedding function already exists in the collection configuration, and a new one is provided. If this is intentional, please embed documents separately. Embedding function conflict: new: {embedding_function.name()} vs persisted: {persisted_ef_config.get('name')}"
+                f"An embedding function already exists in the collection configuration, and a new one is provided. If this is intentional, please embed documents separately. Embedding function conflict: new: {embedding_function_name} vs persisted: {persisted_name}"
             )
     return None
