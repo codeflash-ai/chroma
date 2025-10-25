@@ -228,23 +228,34 @@ class CreateSpannConfiguration(TypedDict, total=False):
 def json_to_create_spann_configuration(
     json_map: Dict[str, Any]
 ) -> CreateSpannConfiguration:
-    config: CreateSpannConfiguration = {}
-    if "search_nprobe" in json_map:
-        config["search_nprobe"] = json_map["search_nprobe"]
-    if "write_nprobe" in json_map:
-        config["write_nprobe"] = json_map["write_nprobe"]
+    # Precompute valid Space values once and reuse
+    # This eliminates repeated calls to get_args(Space)
+    if not hasattr(json_to_create_spann_configuration, "_space_args"):
+        json_to_create_spann_configuration._space_args = set(get_args(Space))
+    space_args = json_to_create_spann_configuration._space_args
+
+    config: "CreateSpannConfiguration" = {}
+    # Reduce dictionary lookup overhead by only iterating once
+    # and keeping this logic straightforward to preserve comments and types
+
+    for key in (
+        "search_nprobe",
+        "write_nprobe",
+        "ef_construction",
+        "ef_search",
+        "max_neighbors",
+    ):
+        if key in json_map:
+            config[key] = json_map[key]
+
+    # Space key requires validation
     if "space" in json_map:
         space_value = json_map["space"]
-        if space_value in get_args(Space):
+        if space_value in space_args:  # use precomputed set for O(1) membership check
             config["space"] = space_value
         else:
             raise ValueError(f"not a valid space: {space_value}")
-    if "ef_construction" in json_map:
-        config["ef_construction"] = json_map["ef_construction"]
-    if "ef_search" in json_map:
-        config["ef_search"] = json_map["ef_search"]
-    if "max_neighbors" in json_map:
-        config["max_neighbors"] = json_map["max_neighbors"]
+
     return config
 
 
