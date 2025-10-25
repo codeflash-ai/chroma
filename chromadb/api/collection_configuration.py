@@ -466,18 +466,15 @@ class UpdateHNSWConfiguration(TypedDict, total=False):
 def json_to_update_hnsw_configuration(
     json_map: Dict[str, Any]
 ) -> UpdateHNSWConfiguration:
-    config: UpdateHNSWConfiguration = {}
-    if "ef_search" in json_map:
-        config["ef_search"] = json_map["ef_search"]
-    if "num_threads" in json_map:
-        config["num_threads"] = json_map["num_threads"]
-    if "batch_size" in json_map:
-        config["batch_size"] = json_map["batch_size"]
-    if "sync_threshold" in json_map:
-        config["sync_threshold"] = json_map["sync_threshold"]
-    if "resize_factor" in json_map:
-        config["resize_factor"] = json_map["resize_factor"]
-    return config
+    # Faster: Use dict comprehension to collect only present, known fields
+    fields = (
+        "ef_search",
+        "num_threads",
+        "batch_size",
+        "sync_threshold",
+        "resize_factor",
+    )
+    return {k: json_map[k] for k in fields if k in json_map}
 
 
 class UpdateSpannConfiguration(TypedDict, total=False):
@@ -532,10 +529,10 @@ def update_collection_configuration_from_legacy_update_metadata(
         "hnsw:sync_threshold": "sync_threshold",
         "hnsw:resize_factor": "resize_factor",
     }
-    json_map = {}
-    for name, value in metadata.items():
-        if name in old_to_new:
-            json_map[old_to_new[name]] = value
+    # Faster: Use dict comprehension to filter and map in one pass
+    json_map = {
+        new: metadata[old] for old, new in old_to_new.items() if old in metadata
+    }
     hnsw_config = json_to_update_hnsw_configuration(json_map)
     return UpdateCollectionConfiguration(hnsw=hnsw_config)
 
