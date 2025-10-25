@@ -19,11 +19,8 @@ class SimpleRateLimitEnforcer(RateLimitEnforcer):
 
     @override
     def rate_limit(self, func: T) -> T:
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return func(*args, **kwargs)
-
-        return wrapper  # type: ignore
+        # Directly return the original function since this naive implementation doesn't actually enforce any rate-limiting logic.
+        return func
 
 
 class SimpleAsyncRateLimitEnforcer(RateLimitEnforcer):
@@ -39,4 +36,5 @@ class SimpleAsyncRateLimitEnforcer(RateLimitEnforcer):
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             return await func(*args, **kwargs)
+
         return wrapper  # type: ignore
