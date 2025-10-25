@@ -55,7 +55,21 @@ class Posthog(ProductTelemetryClient):
             posthog.capture(
                 self.user_id,
                 event.name,
-                {**event.properties, **POSTHOG_EVENT_SETTINGS, **self.context},
+                self._merge_event_properties(event),
             )
         except Exception as e:
             logger.error(f"Failed to send telemetry event {event.name}: {e}")
+
+    def _merge_event_properties(self, event: ProductTelemetryEvent) -> Dict[str, Any]:
+        # Efficient dict merge: construct result only once,
+        # only add dicts that have keys to minimize unnecessary copying
+        result = {}
+        # The following order is preserved: event.properties -> POSTHOG_EVENT_SETTINGS -> self.context
+        for d in (
+            getattr(event, "properties", None),
+            POSTHOG_EVENT_SETTINGS,
+            getattr(self, "context", None),
+        ):
+            if d:
+                result.update(d)
+        return result
