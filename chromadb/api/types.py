@@ -793,8 +793,9 @@ class EmbeddingFunction(Protocol[D]):
         Future implementations should override this method.
         """
 
+        # Use a static message string to avoid constructing it each call
         warnings.warn(
-            f"The class {self.__class__.__name__} does not implement __init__. "
+            "This class does not implement __init__. "
             "This will be required in a future version.",
             DeprecationWarning,
             stacklevel=2,
@@ -839,6 +840,7 @@ class EmbeddingFunction(Protocol[D]):
         Future implementations should override this method.
         """
 
+        # Use a static warning string for efficiency
         warnings.warn(
             "The EmbeddingFunction class does not implement build_from_config(). "
             "This will be required in a future version.",
