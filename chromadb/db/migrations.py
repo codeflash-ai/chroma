@@ -237,13 +237,28 @@ def find_migrations(
 ) -> Sequence[Migration]:
     """Return a list of all migration present in the given directory, in ascending
     order. Filter by scope."""
-    files = [
-        _parse_migration_filename(dir.name, t.name, t)
-        for t in dir.iterdir()
-        if t.name.endswith(".sql")
-    ]
-    files = list(filter(lambda f: f["scope"] == scope, files))
-    files = sorted(files, key=lambda f: f["version"])
+    dir_name = dir.name
+    files = []
+
+    for t in dir.iterdir():
+        if not t.name.endswith(".sql"):
+            continue
+        match = filename_regex.match(t.name)
+        if match is None:
+            raise InvalidMigrationFilename("Invalid migration filename: " + t.name)
+        version, _, fscope = match.groups()
+        if fscope == scope:
+            files.append(
+                {
+                    "path": t,
+                    "dir": dir_name,
+                    "filename": t.name,
+                    "version": int(version),
+                    "scope": fscope,
+                }
+            )
+
+    files.sort(key=lambda f: f["version"])
     return [_read_migration_file(f, hash_alg) for f in files]
 
 
