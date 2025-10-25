@@ -604,31 +604,39 @@ def load_update_collection_configuration_from_json(
     json_map: Dict[str, Any]
 ) -> UpdateCollectionConfiguration:
     """Convert a JSON dict to an UpdateCollectionConfiguration"""
-    if json_map.get("hnsw") is not None and json_map.get("spann") is not None:
+    # Reduce repeated dict lookups for "hnsw", "spann", and "embedding_function"
+    hnsw = json_map.get("hnsw")
+    spann = json_map.get("spann")
+    embedding_function = json_map.get("embedding_function")
+
+    if hnsw is not None and spann is not None:
         raise ValueError("hnsw and spann cannot both be provided")
 
     result = UpdateCollectionConfiguration()
 
     # Handle vector index configurations
-    if json_map.get("hnsw") is not None:
-        result["hnsw"] = json_to_update_hnsw_configuration(json_map["hnsw"])
+    if hnsw is not None:
+        result["hnsw"] = json_to_update_hnsw_configuration(hnsw)
 
-    if json_map.get("spann") is not None:
-        result["spann"] = json_to_update_spann_configuration(json_map["spann"])
+    if spann is not None:
+        result["spann"] = json_to_update_spann_configuration(spann)
 
     # Handle embedding function
-    if json_map.get("embedding_function") is not None:
-        if json_map["embedding_function"]["type"] == "legacy":
+    if embedding_function is not None:
+        ef_type = embedding_function.get("type")
+        ef_name = embedding_function.get("name")
+        ef_config = embedding_function.get("config")
+
+        if ef_type == "legacy":
             warnings.warn(
                 "legacy embedding function config",
                 DeprecationWarning,
                 stacklevel=2,
             )
         else:
-            ef = known_embedding_functions[json_map["embedding_function"]["name"]]
-            result["embedding_function"] = ef.build_from_config(
-                json_map["embedding_function"]["config"]
-            )
+            # Direct lookup and function call, avoiding multiple dict lookups
+            ef = known_embedding_functions[ef_name]
+            result["embedding_function"] = ef.build_from_config(ef_config)
 
     return result
 
