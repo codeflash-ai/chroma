@@ -575,15 +575,14 @@ def update_collection_configuration_to_json(
         if ef.is_legacy():
             ef_config = {"type": "legacy"}
         else:
-            ef.validate_config(ef.get_config())
+            config_obj = ef.get_config()
+            ef.validate_config(config_obj)
             ef_config = {
                 "name": ef.name(),
                 "type": "known",
-                "config": ef.get_config(),
+                "config": config_obj,
             }
             register_embedding_function(type(ef))  # type: ignore
-    else:
-        ef_config = None
 
     return {
         "hnsw": hnsw_config,
