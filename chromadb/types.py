@@ -302,10 +302,13 @@ class Unspecified:
     _instance: Optional["Unspecified"] = None
 
     def __new__(cls) -> "Unspecified":
-        if cls._instance is None:
-            cls._instance = super(Unspecified, cls).__new__(cls)
+        instance = cls._instance
+        if instance is not None:
+            return instance
 
-        return cls._instance
+        instance = super(Unspecified, cls).__new__(cls)
+        cls._instance = instance
+        return instance
 
 
 T = TypeVar("T")
