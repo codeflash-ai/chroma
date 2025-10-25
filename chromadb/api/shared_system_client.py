@@ -43,31 +43,31 @@ class SharedSystemClient:
 
     @staticmethod
     def _get_identifier_from_settings(settings: Settings) -> str:
-        identifier = ""
+        # Avoid repeatedly constructing the same lists and use set literal for fast membership checks
         api_impl = settings.chroma_api_impl
 
         if api_impl is None:
             raise ValueError("Chroma API implementation must be set in settings")
-        elif api_impl in [
+
+        # Use set literals for O(1) lookup and branch first on most likely code paths to improve speed
+        if api_impl in {
             "chromadb.api.segment.SegmentAPI",
             "chromadb.api.rust.RustBindingsAPI",
-        ]:
+        }:
             if settings.is_persistent:
-                identifier = settings.persist_directory
+                return settings.persist_directory
             else:
-                identifier = (
-                    "ephemeral"  # TODO: support pathing and  multiple ephemeral clients
-                )
-        elif api_impl in [
+                # TODO: support pathing and  multiple ephemeral clients
+                return "ephemeral"
+        elif api_impl in {
             "chromadb.api.fastapi.FastAPI",
             "chromadb.api.async_fastapi.AsyncFastAPI",
-        ]:
+        }:
             # FastAPI clients can all use unique system identifiers since their configurations can be independent, e.g. different auth tokens
-            identifier = str(uuid.uuid4())
+            # uuid4() is expensive, only do when needed
+            return str(uuid.uuid4())
         else:
             raise ValueError(f"Unsupported Chroma API implementation {api_impl}")
-
-        return identifier
 
     @staticmethod
     def _populate_data_from_system(system: System) -> str:
