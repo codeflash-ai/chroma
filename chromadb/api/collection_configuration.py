@@ -638,18 +638,22 @@ def overwrite_hnsw_configuration(
 ) -> HNSWConfiguration:
     """Overwrite a HNSWConfiguration with a new configuration"""
     # Create a copy of the existing config and update with new values
-    result = dict(existing_hnsw_config)
-    update_fields = [
+    update_fields = (
         "ef_search",
         "num_threads",
         "batch_size",
         "sync_threshold",
         "resize_factor",
-    ]
+    )
 
-    for field in update_fields:
-        if field in update_hnsw_config:
-            result[field] = update_hnsw_config[field]  # type: ignore
+    result = {
+        **existing_hnsw_config,
+        **{
+            field: update_hnsw_config[field]
+            for field in update_fields
+            if field in update_hnsw_config
+        },
+    }
 
     return cast(HNSWConfiguration, result)
 
