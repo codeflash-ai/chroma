@@ -13,6 +13,8 @@ from chromadb.utils.embedding_functions import (
 from multiprocessing import cpu_count
 import warnings
 
+_VALID_SPACES = set(get_args(Space))
+
 
 class HNSWConfiguration(TypedDict, total=False):
     space: Space
@@ -190,26 +192,28 @@ def json_to_create_hnsw_configuration(
     json_map: Dict[str, Any]
 ) -> CreateHNSWConfiguration:
     config: CreateHNSWConfiguration = {}
+
+    # Fast direct assignment for keys other than "space"
+    for key in (
+        "ef_construction",
+        "max_neighbors",
+        "ef_search",
+        "num_threads",
+        "batch_size",
+        "sync_threshold",
+        "resize_factor",
+    ):
+        if key in json_map:
+            config[key] = json_map[key]
+
+    # Optimized space check (set lookup is O(1))
     if "space" in json_map:
         space_value = json_map["space"]
-        if space_value in get_args(Space):
+        if space_value in _VALID_SPACES:
             config["space"] = space_value
         else:
             raise ValueError(f"not a valid space: {space_value}")
-    if "ef_construction" in json_map:
-        config["ef_construction"] = json_map["ef_construction"]
-    if "max_neighbors" in json_map:
-        config["max_neighbors"] = json_map["max_neighbors"]
-    if "ef_search" in json_map:
-        config["ef_search"] = json_map["ef_search"]
-    if "num_threads" in json_map:
-        config["num_threads"] = json_map["num_threads"]
-    if "batch_size" in json_map:
-        config["batch_size"] = json_map["batch_size"]
-    if "sync_threshold" in json_map:
-        config["sync_threshold"] = json_map["sync_threshold"]
-    if "resize_factor" in json_map:
-        config["resize_factor"] = json_map["resize_factor"]
+
     return config
 
 
