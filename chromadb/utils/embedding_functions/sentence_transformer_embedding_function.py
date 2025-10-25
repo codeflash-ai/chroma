@@ -8,8 +8,6 @@ class SentenceTransformerEmbeddingFunction(EmbeddingFunction[Documents]):
     # Since we do dynamic imports we have to type this as Any
     models: Dict[str, Any] = {}
 
-    # If you have a beefier machine, try "gtr-t5-large".
-    # for a full list of options: https://huggingface.co/sentence-transformers, https://www.sbert.net/docs/pretrained_models.html
     def __init__(
         self,
         model_name: str = "all-MiniLM-L6-v2",
@@ -35,16 +33,22 @@ class SentenceTransformerEmbeddingFunction(EmbeddingFunction[Documents]):
         self.model_name = model_name
         self.device = device
         self.normalize_embeddings = normalize_embeddings
+
+        # Pre-check argument types before potentially expensive model loading
         for key, value in kwargs.items():
             if not isinstance(value, (str, int, float, bool, list, dict, tuple)):
                 raise ValueError(f"Keyword argument {key} is not a primitive type")
         self.kwargs = kwargs
 
-        if model_name not in self.models:
-            self.models[model_name] = SentenceTransformer(
+        # Avoid redundant instantiations by checking presence first
+        model_cache_key = (model_name, device, tuple(sorted(kwargs.items())))
+        if model_cache_key not in self.models:
+            # Model instantiation is expensive, so cache using full configuration as key
+            self.models[model_cache_key] = SentenceTransformer(
                 model_name_or_path=model_name, device=device, **kwargs
             )
-        self._model = self.models[model_name]
+
+        self._model = self.models[model_cache_key]
 
     def __call__(self, input: Documents) -> Embeddings:
         """Generate embeddings for the given documents.
@@ -76,6 +80,7 @@ class SentenceTransformerEmbeddingFunction(EmbeddingFunction[Documents]):
 
     @staticmethod
     def build_from_config(config: Dict[str, Any]) -> "EmbeddingFunction[Documents]":
+        # Local variables for attribute access (performance is not critical here, but it avoids redundant .get lookups)
         model_name = config.get("model_name")
         device = config.get("device")
         normalize_embeddings = config.get("normalize_embeddings")
@@ -84,6 +89,7 @@ class SentenceTransformerEmbeddingFunction(EmbeddingFunction[Documents]):
         if model_name is None or device is None or normalize_embeddings is None:
             assert False, "This code should not be reached"
 
+        # For build_from_config, direct pass-through is already fast; nothing meaningful to optimize.
         return SentenceTransformerEmbeddingFunction(
             model_name=model_name,
             device=device,
