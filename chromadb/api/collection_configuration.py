@@ -560,13 +560,14 @@ def update_collection_configuration_to_json(
 
     if hnsw_config is not None:
         try:
-            hnsw_config = cast(UpdateHNSWConfiguration, hnsw_config)
+            # 'cast' does nothing at runtime, skip re-assignment
+            cast(UpdateHNSWConfiguration, hnsw_config)
         except Exception as e:
             raise ValueError(f"not a valid hnsw config: {e}")
 
     if spann_config is not None:
         try:
-            spann_config = cast(UpdateSpannConfiguration, spann_config)
+            cast(UpdateSpannConfiguration, spann_config)
         except Exception as e:
             raise ValueError(f"not a valid spann config: {e}")
 
@@ -575,15 +576,14 @@ def update_collection_configuration_to_json(
         if ef.is_legacy():
             ef_config = {"type": "legacy"}
         else:
-            ef.validate_config(ef.get_config())
+            config_value = ef.get_config()
+            ef.validate_config(config_value)
             ef_config = {
                 "name": ef.name(),
                 "type": "known",
-                "config": ef.get_config(),
+                "config": config_value,
             }
             register_embedding_function(type(ef))  # type: ignore
-    else:
-        ef_config = None
 
     return {
         "hnsw": hnsw_config,
