@@ -1,5 +1,5 @@
 from typing import (
-    Optional,
+    Type, Optional,
     Set,
     Union,
     TypeVar,
@@ -793,12 +793,15 @@ class EmbeddingFunction(Protocol[D]):
         Future implementations should override this method.
         """
 
-        warnings.warn(
-            f"The class {self.__class__.__name__} does not implement __init__. "
-            "This will be required in a future version.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        cls = type(self)
+        if cls not in _warned_init_classes:
+            warnings.warn(
+                f"The class {cls.__name__} does not implement __init__. "
+                "This will be required in a future version.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            _warned_init_classes.add(cls)
 
     @staticmethod
     def name() -> str:
@@ -809,12 +812,15 @@ class EmbeddingFunction(Protocol[D]):
         Future implementations should override this method.
         """
 
-        warnings.warn(
-            "The EmbeddingFunction class does not implement name(). "
-            "This will be required in a future version.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        cls = EmbeddingFunction
+        if cls not in _warned_name_classes:
+            warnings.warn(
+                "The EmbeddingFunction class does not implement name(). "
+                "This will be required in a future version.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            _warned_name_classes.add(cls)
         return NotImplemented
 
     def default_space(self) -> Space:
@@ -2499,6 +2505,9 @@ class Schema:
                         from chromadb.utils.embedding_functions import (
                             sparse_known_embedding_functions,
                         )
+                        
+                        _warned_init_classes: Set[Type] = set()
+                        _warned_name_classes: Set[Type] = set()
 
                         ef_name = ef_config["name"]
                         ef = sparse_known_embedding_functions[ef_name]
