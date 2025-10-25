@@ -27,8 +27,12 @@ def _clean_metadata(metadata: Optional[Metadata]) -> Optional[Metadata]:
 def _doc(metadata: Optional[Metadata]) -> Optional[str]:
     """Retrieve the document (if any) from a Metadata map"""
 
-    if metadata and "chroma:document" in metadata:
-        return str(metadata["chroma:document"])
+    # Use try/except for direct key access, avoids double dict lookup
+    try:
+        if metadata is not None:
+            return str(metadata["chroma:document"])
+    except KeyError:
+        pass
     return None
 
 
