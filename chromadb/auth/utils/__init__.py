@@ -26,16 +26,28 @@ def _singleton_tenant_database_if_applicable(
     """
     if not overwrite_singleton_tenant_database_access_from_auth:
         return None, None
+
     tenant = None
     database = None
     user_tenant = user_identity.tenant
     user_databases = user_identity.databases
+
     if user_tenant and user_tenant != "*":
         tenant = user_tenant
+
+    # Inline small fast-path for length-1 lists (avoid set/list construction in common case)
     if user_databases:
-        user_databases_set = set(user_databases)
-        if len(user_databases_set) == 1 and "*" not in user_databases_set:
-            database = list(user_databases_set)[0]
+        # Avoid building a set unless list is not length 1 or contains wildcard
+        if len(user_databases) == 1:
+            db = user_databases[0]
+            if db != "*":
+                database = db
+        else:
+            # Fallback to set logic for multiple databases or presence of wildcard
+            user_databases_set = set(user_databases)
+            if len(user_databases_set) == 1 and "*" not in user_databases_set:
+                # Since set has only one item, get it efficiently
+                database = next(iter(user_databases_set))
     return tenant, database
 
 
@@ -65,22 +77,27 @@ def maybe_set_tenant_and_database(
         and new_tenant
         and new_tenant != user_provided_tenant
     ):
-        raise ChromaAuthError(f"Tenant {user_provided_tenant} does not match {new_tenant} from the server. Are you sure the tenant is correct?")
+        raise ChromaAuthError(
+            f"Tenant {user_provided_tenant} does not match {new_tenant} from the server. Are you sure the tenant is correct?"
+        )
     if (
         user_provided_database
         and user_provided_database != DEFAULT_DATABASE
         and new_database
         and new_database != user_provided_database
     ):
-        raise ChromaAuthError(f"Database {user_provided_database} does not match {new_database} from the server. Are you sure the database is correct?")
+        raise ChromaAuthError(
+            f"Database {user_provided_database} does not match {new_database} from the server. Are you sure the database is correct?"
+        )
 
+    # Avoid redundant assignments by using direct assignment
     if (
         not user_provided_tenant or user_provided_tenant == DEFAULT_TENANT
-    ) and new_tenant:
+    ) and new_tenant is not None:
         user_provided_tenant = new_tenant
     if (
         not user_provided_database or user_provided_database == DEFAULT_DATABASE
-    ) and new_database:
+    ) and new_database is not None:
         user_provided_database = new_database
 
     return user_provided_tenant, user_provided_database
