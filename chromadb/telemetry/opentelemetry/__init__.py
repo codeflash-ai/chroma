@@ -82,6 +82,13 @@ def otel_init(
     """
     if otel_granularity == OpenTelemetryGranularity.NONE:
         return
+
+    global tracer, granularity
+    if getattr(trace, "_otel_init_done", False):
+        tracer = trace.get_tracer(__name__)
+        granularity = otel_granularity
+        return
+
     resource = Resource(attributes={SERVICE_NAME: str(otel_service_name)})
     provider = TracerProvider(resource=resource)
     provider.add_span_processor(
@@ -95,9 +102,9 @@ def otel_init(
     )
     trace.set_tracer_provider(provider)
 
-    global tracer, granularity
     tracer = trace.get_tracer(__name__)
     granularity = otel_granularity
+    trace._otel_init_done = True
 
 
 T = TypeVar("T", bound=Callable)  # type: ignore[type-arg]
