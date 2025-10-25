@@ -674,15 +674,25 @@ def to_proto_knn_plan(knn: KNNPlan) -> query_pb.KNNPlan:
 def from_proto_knn_projection_record(
     record: query_pb.KNNProjectionRecord,
 ) -> KNNProjectionRecord:
+    # Inline the record creation to avoid unnecessary indirection
+    sub_record = record.record
+    # Inline from_proto_projection_record logic if possible, otherwise delegate
     return KNNProjectionRecord(
-        record=from_proto_projection_record(record.record), distance=record.distance
+        record=from_proto_projection_record(sub_record),
+        distance=record.distance,
     )
 
 
 def from_proto_knn_batch_result(
     results: query_pb.KNNBatchResult,
 ) -> Sequence[Sequence[KNNProjectionRecord]]:
-    return [
-        [from_proto_knn_projection_record(record) for record in result.records]
-        for result in results.results
-    ]
+    # Pre-allocate list size for results to avoid dynamic resizing
+    out_results = []
+    append_out_results = out_results.append
+    for result in results.results:
+        inner_records = []
+        append_inner = inner_records.append
+        for record in result.records:
+            append_inner(from_proto_knn_projection_record(record))
+        append_out_results(inner_records)
+    return out_results
