@@ -101,7 +101,21 @@ def from_proto_operation(operation: chroma_pb.Operation) -> Operation:
 
 
 def from_proto_metadata(metadata: chroma_pb.UpdateMetadata) -> Optional[Metadata]:
-    return cast(Optional[Metadata], _from_proto_metadata_handle_none(metadata, False))
+    if not metadata.metadata:
+        return None
+    out_metadata = {}
+    for key, value in metadata.metadata.items():
+        if value.HasField("bool_value"):
+            out_metadata[key] = value.bool_value
+        elif value.HasField("string_value"):
+            out_metadata[key] = value.string_value
+        elif value.HasField("int_value"):
+            out_metadata[key] = value.int_value
+        elif value.HasField("float_value"):
+            out_metadata[key] = value.float_value
+        else:
+            raise ValueError(f"Metadata key {key} value cannot be None")
+    return cast(Optional[Metadata], out_metadata)
 
 
 def from_proto_update_metadata(
