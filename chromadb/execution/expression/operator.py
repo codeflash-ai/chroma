@@ -438,10 +438,11 @@ class Key:
 
     def __init__(self, name: str):
         self.name = name
+        self._hash: int = hash(name)
 
     def __hash__(self) -> int:
         """Make Key hashable for use in sets"""
-        return hash(self.name)
+        return self._hash
 
     # Comparison operators
     def __eq__(self, value: Any) -> Eq:  # type: ignore[override]
