@@ -122,30 +122,76 @@ class BruteForceIndex:
         allowed_ids = (
             None if query["allowed_ids"] is None else set(query["allowed_ids"])
         )
-        distances = np.apply_along_axis(
-            lambda query: np.apply_along_axis(self.distance_fn, 1, self.vectors, query),
-            1,
-            np_query,
-        )
+
+        valid_indices = []
+        for j in self.index_to_id:
+            id = self.index_to_id[j]
+            if id not in self.deleted_ids and (
+                allowed_ids is None or id in allowed_ids
+            ):
+                valid_indices.append(j)
+
+        if not valid_indices:
+            return [[] for _ in range(len(np_query))]
+
+        valid_indices = np.array(valid_indices)
+        valid_vectors = self.vectors[valid_indices]
+
+        if self.distance_fn is distance_functions.l2:
+            distances = np.sum(
+                (valid_vectors[None, :, :] - np_query[:, None, :]) ** 2, axis=2
+            )
+        elif self.distance_fn is distance_functions.ip:
+            distances = 1.0 - np.dot(np_query, valid_vectors.T)
+        elif self.distance_fn is distance_functions.cosine:
+            NORM_EPS = 1e-30
+            if np_query.dtype == np.float16 or valid_vectors.dtype == np.float16:
+                NORM_EPS = 1e-7
+            q_norms = np.linalg.norm(np_query, axis=1, keepdims=True) + NORM_EPS
+            v_norms = np.linalg.norm(valid_vectors, axis=1, keepdims=True) + NORM_EPS
+            dot_products = np.dot(np_query, valid_vectors.T)
+            distances = 1.0 - dot_products / (q_norms * v_norms.T)
+        else:
+            distances = np.apply_along_axis(
+                lambda query: np.apply_along_axis(
+                    self.distance_fn, 1, self.vectors, query
+                ),
+                1,
+                np_query,
+            )
+            indices = np.argsort(distances)
+            filtered_results = []
+            for i, index_list in enumerate(indices):
+                curr_results = []
+                for j in index_list:
+                    if j in self.index_to_id:
+                        id = self.index_to_id[j]
+                        if id not in self.deleted_ids and (
+                            allowed_ids is None or id in allowed_ids
+                        ):
+                            curr_results.append(
+                                VectorQueryResult(
+                                    id=id,
+                                    distance=distances[i][j].item(),
+                                    embedding=self.vectors[j],
+                                )
+                            )
+                filtered_results.append(curr_results)
+            return filtered_results
 
         indices = np.argsort(distances)
-        # Filter out deleted labels
         filtered_results = []
         for i, index_list in enumerate(indices):
             curr_results = []
             for j in index_list:
-                # If the index is in the index_to_id map, then it has been added
-                if j in self.index_to_id:
-                    id = self.index_to_id[j]
-                    if id not in self.deleted_ids and (
-                        allowed_ids is None or id in allowed_ids
-                    ):
-                        curr_results.append(
-                            VectorQueryResult(
-                                id=id,
-                                distance=distances[i][j].item(),
-                                embedding=self.vectors[j],
-                            )
-                        )
+                idx = valid_indices[j]
+                id = self.index_to_id[idx]
+                curr_results.append(
+                    VectorQueryResult(
+                        id=id,
+                        distance=distances[i][j].item(),
+                        embedding=self.vectors[idx],
+                    )
+                )
             filtered_results.append(curr_results)
         return filtered_results
