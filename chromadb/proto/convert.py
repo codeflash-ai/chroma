@@ -36,6 +36,18 @@ from chromadb.types import (
     VectorQueryResult,
 )
 
+_SCALAR_ENCODING_MAP = {
+    ScalarEncoding.FLOAT32: (np.float32, chroma_pb.ScalarEncoding.FLOAT32),
+    ScalarEncoding.INT32: (np.int32, chroma_pb.ScalarEncoding.INT32),
+}
+
+_OPERATION_MAP = {
+    Operation.ADD: chroma_pb.Operation.ADD,
+    Operation.UPDATE: chroma_pb.Operation.UPDATE,
+    Operation.UPSERT: chroma_pb.Operation.UPSERT,
+    Operation.DELETE: chroma_pb.Operation.DELETE,
+}
+
 
 class ProjectionRecord(TypedDict):
     id: str
@@ -51,17 +63,15 @@ class KNNProjectionRecord(TypedDict):
 
 # TODO: Unit tests for this file, handling optional states etc
 def to_proto_vector(vector: Vector, encoding: ScalarEncoding) -> chroma_pb.Vector:
-    if encoding == ScalarEncoding.FLOAT32:
-        as_bytes = np.array(vector, dtype=np.float32).tobytes()
-        proto_encoding = chroma_pb.ScalarEncoding.FLOAT32
-    elif encoding == ScalarEncoding.INT32:
-        as_bytes = np.array(vector, dtype=np.int32).tobytes()
-        proto_encoding = chroma_pb.ScalarEncoding.INT32
-    else:
+    try:
+        dtype, proto_encoding = _SCALAR_ENCODING_MAP[encoding]
+    except KeyError:
         raise ValueError(
             f"Unknown encoding {encoding}, expected one of {ScalarEncoding.FLOAT32} \
             or {ScalarEncoding.INT32}"
         )
+
+    as_bytes = np.array(vector, dtype=dtype).tobytes()
 
     return chroma_pb.Vector(
         dimension=vector.size, vector=as_bytes, encoding=proto_encoding
@@ -135,9 +145,12 @@ def _from_proto_metadata_handle_none(
 
 
 def to_proto_update_metadata(metadata: UpdateMetadata) -> chroma_pb.UpdateMetadata:
-    return chroma_pb.UpdateMetadata(
-        metadata={k: to_proto_metadata_update_value(v) for k, v in metadata.items()}
-    )
+    # Use a local variable for faster scope & avoid unnecessary dict overhead
+    items = metadata.items()
+    proto_dict = {}
+    for k, v in items:
+        proto_dict[k] = to_proto_metadata_update_value(v)
+    return chroma_pb.UpdateMetadata(metadata=proto_dict)
 
 
 def from_proto_submit(
@@ -272,15 +285,9 @@ def to_proto_collection(collection: Collection) -> chroma_pb.Collection:
 
 
 def to_proto_operation(operation: Operation) -> chroma_pb.Operation:
-    if operation == Operation.ADD:
-        return chroma_pb.Operation.ADD
-    elif operation == Operation.UPDATE:
-        return chroma_pb.Operation.UPDATE
-    elif operation == Operation.UPSERT:
-        return chroma_pb.Operation.UPSERT
-    elif operation == Operation.DELETE:
-        return chroma_pb.Operation.DELETE
-    else:
+    try:
+        return _OPERATION_MAP[operation]
+    except KeyError:
         raise ValueError(
             f"Unknown operation {operation}, expected one of {Operation.ADD}, \
             {Operation.UPDATE}, {Operation.UPDATE}, or {Operation.DELETE}"
@@ -291,12 +298,15 @@ def to_proto_submit(
     submit_record: OperationRecord,
 ) -> chroma_pb.OperationRecord:
     vector = None
-    if submit_record["embedding"] is not None and submit_record["encoding"] is not None:
-        vector = to_proto_vector(submit_record["embedding"], submit_record["encoding"])
+    embedding = submit_record["embedding"]
+    encoding = submit_record["encoding"]
+    if embedding is not None and encoding is not None:
+        vector = to_proto_vector(embedding, encoding)
 
     metadata = None
-    if submit_record["metadata"] is not None:
-        metadata = to_proto_update_metadata(submit_record["metadata"])
+    meta = submit_record["metadata"]
+    if meta is not None:
+        metadata = to_proto_update_metadata(meta)
 
     return chroma_pb.OperationRecord(
         id=submit_record["id"],
