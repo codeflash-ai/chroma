@@ -95,33 +95,45 @@ class ConfigurationInternal(JSONSerializable["ConfigurationInternal"]):
     parameter_map: Dict[str, ConfigurationParameter]
     definitions: ClassVar[Dict[str, ConfigurationDefinition]]
 
-    def __init__(self, parameters: Optional[List[ConfigurationParameter]] = None):
+    def __init__(self, parameters: Optional[List["ConfigurationParameter"]] = None):
         """Initializes a new instance of the Configuration class. Respecting defaults and
         validators."""
         self.parameter_map = {}
+
+        # Pre-fetch definitions and globals lookup as local variables for faster access
+        definitions = self.definitions
+        globals_get = globals().get
+
         if parameters is not None:
             for parameter in parameters:
-                if parameter.name not in self.definitions:
-                    raise ValueError(f"Invalid parameter name: {parameter.name}")
+                param_name = parameter.name
+                if param_name not in definitions:
+                    raise ValueError(f"Invalid parameter name: {param_name}")
 
-                definition = self.definitions[parameter.name]
+                definition = definitions[param_name]
+                param_value = parameter.value
+
                 # Handle the case where we have a recursive configuration definition
-                if isinstance(parameter.value, dict):
-                    child_type = globals().get(parameter.value.get("_type", None))
+                if isinstance(param_value, dict):
+                    child_type_name = param_value.get("_type", None)
+                    child_type = globals_get(child_type_name)
                     if child_type is None:
-                        raise ValueError(
-                            f"Invalid configuration type: {parameter.value}"
-                        )
-                    parameter.value = child_type.from_json(parameter.value)
-                if not isinstance(parameter.value, type(definition.default_value)):
-                    raise ValueError(f"Invalid parameter value: {parameter.value}")
+                        raise ValueError(f"Invalid configuration type: {param_value}")
+                    param_value = child_type.from_json(param_value)
+                    parameter.value = param_value
+
+                # Fast type checking for values
+                if not isinstance(param_value, type(definition.default_value)):
+                    raise ValueError(f"Invalid parameter value: {param_value}")
 
                 parameter_validator = definition.validator
-                if not parameter_validator(parameter.value):
-                    raise ValueError(f"Invalid parameter value: {parameter.value}")
-                self.parameter_map[parameter.name] = parameter
+                if not parameter_validator(param_value):
+                    raise ValueError(f"Invalid parameter value: {param_value}")
+
+                self.parameter_map[param_name] = parameter
+
         # Apply the defaults for any missing parameters
-        for name, definition in self.definitions.items():
+        for name, definition in definitions.items():
             if name not in self.parameter_map:
                 self.parameter_map[name] = ConfigurationParameter(
                     name=name, value=definition.default_value
@@ -151,12 +163,13 @@ class ConfigurationInternal(JSONSerializable["ConfigurationInternal"]):
 
     def get_parameter(self, name: str) -> ConfigurationParameter:
         """Returns the parameter with the given name, or except if it doesn't exist."""
-        if name not in self.parameter_map:
+        # Use direct __getitem__ instead of .get() + cast for speed, and raise instantly if not present
+        try:
+            return self.parameter_map[name]
+        except KeyError:
             raise ValueError(
                 f"Invalid parameter name: {name} for configuration {self.__class__.__name__}"
             )
-        param_value = cast(ConfigurationParameter, self.parameter_map.get(name))
-        return param_value
 
     def set_parameter(self, name: str, value: Union[str, int, float, bool]) -> None:
         """Sets the parameter with the given name to the given value."""
