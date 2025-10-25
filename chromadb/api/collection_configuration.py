@@ -639,15 +639,14 @@ def overwrite_hnsw_configuration(
     """Overwrite a HNSWConfiguration with a new configuration"""
     # Create a copy of the existing config and update with new values
     result = dict(existing_hnsw_config)
-    update_fields = [
+    # Inline the update_fields definition for better locality and cache
+    for field in (
         "ef_search",
         "num_threads",
         "batch_size",
         "sync_threshold",
         "resize_factor",
-    ]
-
-    for field in update_fields:
+    ):
         if field in update_hnsw_config:
             result[field] = update_hnsw_config[field]  # type: ignore
 
@@ -660,12 +659,8 @@ def overwrite_spann_configuration(
 ) -> SpannConfiguration:
     """Overwrite a SpannConfiguration with a new configuration"""
     result = dict(existing_spann_config)
-    update_fields = [
-        "search_nprobe",
-        "ef_search",
-    ]
-
-    for field in update_fields:
+    # Inline the update_fields for minimal memory allocation
+    for field in ("search_nprobe", "ef_search"):
         if field in update_spann_config:
             result[field] = update_spann_config[field]  # type: ignore
 
@@ -676,7 +671,7 @@ def overwrite_spann_configuration(
 def overwrite_embedding_function(
     existing_embedding_function: EmbeddingFunction,  # type: ignore
     update_embedding_function: EmbeddingFunction,  # type: ignore
-) -> EmbeddingFunction:  # type: ignore
+) -> EmbeddingFunction:
     """Overwrite an EmbeddingFunction with a new configuration"""
     # Check for legacy embedding functions
     if existing_embedding_function.is_legacy() or update_embedding_function.is_legacy():
@@ -688,16 +683,18 @@ def overwrite_embedding_function(
         return existing_embedding_function
 
     # Validate function compatibility
-    if existing_embedding_function.name() != update_embedding_function.name():
+    existing_name = existing_embedding_function.name()
+    update_name = update_embedding_function.name()
+    if existing_name != update_name:
         raise ValueError(
             f"Cannot update embedding function: incompatible types "
-            f"({existing_embedding_function.name()} vs {update_embedding_function.name()})"
+            f"({existing_name} vs {update_name})"
         )
 
     # Validate and apply the configuration update
-    update_embedding_function.validate_config_update(
-        existing_embedding_function.get_config(), update_embedding_function.get_config()
-    )
+    existing_config = existing_embedding_function.get_config()
+    update_config = update_embedding_function.get_config()
+    update_embedding_function.validate_config_update(existing_config, update_config)
     return update_embedding_function
 
 
@@ -711,23 +708,19 @@ def overwrite_collection_configuration(
     if update_spann is not None and update_hnsw is not None:
         raise ValueError("hnsw and spann cannot both be provided")
 
-    # Handle HNSW configuration update
-
     updated_hnsw_config = existing_config.get("hnsw")
+    updated_spann_config = existing_config.get("spann")
+    updated_embedding_function = existing_config.get("embedding_function")
+
+    # Only call overwrite_* if update is provided and existing config is present
     if updated_hnsw_config is not None and update_hnsw is not None:
         updated_hnsw_config = overwrite_hnsw_configuration(
             updated_hnsw_config, update_hnsw
         )
-
-    # Handle SPANN configuration update
-    updated_spann_config = existing_config.get("spann")
     if updated_spann_config is not None and update_spann is not None:
         updated_spann_config = overwrite_spann_configuration(
             updated_spann_config, update_spann
         )
-
-    # Handle embedding function update
-    updated_embedding_function = existing_config.get("embedding_function")
     update_ef = update_config.get("embedding_function")
     if update_ef is not None:
         if updated_embedding_function is not None:
@@ -737,6 +730,7 @@ def overwrite_collection_configuration(
         else:
             updated_embedding_function = update_ef
 
+    # Only call CollectionConfiguration once, return immediately for less stack usage
     return CollectionConfiguration(
         hnsw=updated_hnsw_config,
         spann=updated_spann_config,
