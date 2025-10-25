@@ -95,35 +95,46 @@ class ConfigurationInternal(JSONSerializable["ConfigurationInternal"]):
     parameter_map: Dict[str, ConfigurationParameter]
     definitions: ClassVar[Dict[str, ConfigurationDefinition]]
 
-    def __init__(self, parameters: Optional[List[ConfigurationParameter]] = None):
+    def __init__(self, parameters: Optional[List["ConfigurationParameter"]] = None):
         """Initializes a new instance of the Configuration class. Respecting defaults and
         validators."""
         self.parameter_map = {}
-        if parameters is not None:
-            for parameter in parameters:
-                if parameter.name not in self.definitions:
-                    raise ValueError(f"Invalid parameter name: {parameter.name}")
+        # Cache local vars for very hot attribute accesses
+        definitions = self.definitions
 
-                definition = self.definitions[parameter.name]
+        if parameters is not None:
+            definitions_get = definitions.get
+            param_map_set = self.parameter_map.__setitem__
+            for parameter in parameters:
+                name = parameter.name
+                definition = definitions_get(name, None)
+                if definition is None:
+                    raise ValueError(f"Invalid parameter name: {name}")
+
                 # Handle the case where we have a recursive configuration definition
-                if isinstance(parameter.value, dict):
-                    child_type = globals().get(parameter.value.get("_type", None))
+                value = parameter.value
+                if isinstance(value, dict):
+                    _type = value.get("_type", None)
+                    child_type = globals().get(_type)
                     if child_type is None:
-                        raise ValueError(
-                            f"Invalid configuration type: {parameter.value}"
-                        )
-                    parameter.value = child_type.from_json(parameter.value)
-                if not isinstance(parameter.value, type(definition.default_value)):
-                    raise ValueError(f"Invalid parameter value: {parameter.value}")
+                        raise ValueError(f"Invalid configuration type: {value}")
+                    value = child_type.from_json(value)
+                    parameter.value = value
+
+                if not isinstance(value, type(definition.default_value)):
+                    raise ValueError(f"Invalid parameter value: {value}")
 
                 parameter_validator = definition.validator
-                if not parameter_validator(parameter.value):
-                    raise ValueError(f"Invalid parameter value: {parameter.value}")
-                self.parameter_map[parameter.name] = parameter
-        # Apply the defaults for any missing parameters
-        for name, definition in self.definitions.items():
-            if name not in self.parameter_map:
-                self.parameter_map[name] = ConfigurationParameter(
+                if not parameter_validator(value):
+                    raise ValueError(f"Invalid parameter value: {value}")
+
+                param_map_set(name, parameter)
+
+        # Apply defaults for missing params
+        param_map = self.parameter_map
+        for name, definition in definitions.items():
+            if name not in param_map:
+                param_map[name] = ConfigurationParameter(
                     name=name, value=definition.default_value
                 )
 
@@ -147,6 +158,8 @@ class ConfigurationInternal(JSONSerializable["ConfigurationInternal"]):
 
     def get_parameters(self) -> List[ConfigurationParameter]:
         """Returns the parameters of the configuration."""
+        # dict.values() is a view, and this is about as fast as it gets per profile,
+        # so leave as original implementation.
         return list(self.parameter_map.values())
 
     def get_parameter(self, name: str) -> ConfigurationParameter:
