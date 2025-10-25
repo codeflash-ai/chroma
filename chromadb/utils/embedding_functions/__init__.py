@@ -212,7 +212,7 @@ def register_sparse_embedding_function(ef_class=None):  # type: ignore
 
 
 # Function to convert config to embedding function
-def config_to_embedding_function(config: Dict[str, Any]) -> EmbeddingFunction:  # type: ignore
+def config_to_embedding_function(config: Dict[str, Any]) -> EmbeddingFunction:
     """Convert a config dictionary to an embedding function.
 
     Args:
@@ -221,19 +221,17 @@ def config_to_embedding_function(config: Dict[str, Any]) -> EmbeddingFunction:  
     Returns:
         The embedding function.
     """
-    if "name" not in config:
+    name = config.get("name", None)
+    if name is None:
         raise ValueError("Config must contain a 'name' field.")
 
-    name = config["name"]
-    if name not in known_embedding_functions:
+    embedding_func = known_embedding_functions.get(name)
+    if embedding_func is None:
         raise ValueError(f"Unsupported embedding function: {name}")
 
     ef_config = config.get("config", {})
 
-    if known_embedding_functions[name] is None:
-        raise ValueError(f"Unsupported embedding function: {name}")
-
-    return known_embedding_functions[name].build_from_config(ef_config)
+    return embedding_func.build_from_config(ef_config)
 
 
 __all__ = [
