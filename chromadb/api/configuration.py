@@ -95,35 +95,47 @@ class ConfigurationInternal(JSONSerializable["ConfigurationInternal"]):
     parameter_map: Dict[str, ConfigurationParameter]
     definitions: ClassVar[Dict[str, ConfigurationDefinition]]
 
-    def __init__(self, parameters: Optional[List[ConfigurationParameter]] = None):
+    def __init__(self, parameters: Optional[List["ConfigurationParameter"]] = None):
         """Initializes a new instance of the Configuration class. Respecting defaults and
         validators."""
-        self.parameter_map = {}
+        # Pre-bind commonly accessed definitions local
+        definitions = self.definitions
+        parameter_map = self.parameter_map = {}
+
         if parameters is not None:
+            # Localize globals() lookup to avoid repeated lookups inside the loop
+            gbls = globals()
             for parameter in parameters:
-                if parameter.name not in self.definitions:
-                    raise ValueError(f"Invalid parameter name: {parameter.name}")
+                param_name = parameter.name
+                param_value = parameter.value
 
-                definition = self.definitions[parameter.name]
-                # Handle the case where we have a recursive configuration definition
-                if isinstance(parameter.value, dict):
-                    child_type = globals().get(parameter.value.get("_type", None))
+                if param_name not in definitions:
+                    raise ValueError(f"Invalid parameter name: {param_name}")
+
+                definition = definitions[param_name]
+
+                # Efficiently handle possible recursive configuration definition
+                if isinstance(param_value, dict):
+                    param_type_name = param_value.get("_type")
+                    child_type = gbls.get(param_type_name) if param_type_name else None
                     if child_type is None:
-                        raise ValueError(
-                            f"Invalid configuration type: {parameter.value}"
-                        )
-                    parameter.value = child_type.from_json(parameter.value)
-                if not isinstance(parameter.value, type(definition.default_value)):
-                    raise ValueError(f"Invalid parameter value: {parameter.value}")
+                        raise ValueError(f"Invalid configuration type: {param_value}")
+                    param_value = child_type.from_json(param_value)
+                    parameter.value = param_value  # preserve input mutability pattern
 
+                if not isinstance(param_value, type(definition.default_value)):
+                    raise ValueError(f"Invalid parameter value: {param_value}")
+
+                # Use the validator directly
                 parameter_validator = definition.validator
-                if not parameter_validator(parameter.value):
-                    raise ValueError(f"Invalid parameter value: {parameter.value}")
-                self.parameter_map[parameter.name] = parameter
-        # Apply the defaults for any missing parameters
-        for name, definition in self.definitions.items():
-            if name not in self.parameter_map:
-                self.parameter_map[name] = ConfigurationParameter(
+                if not parameter_validator(param_value):
+                    raise ValueError(f"Invalid parameter value: {param_value}")
+                parameter_map[param_name] = parameter
+
+        # Apply the defaults for any missing parameters (iterate over definitions directly for speed)
+        for name, definition in definitions.items():
+            if name not in parameter_map:
+                parameter_map[name] = ConfigurationParameter(
                     name=name, value=definition.default_value
                 )
 
@@ -204,16 +216,20 @@ class ConfigurationInternal(JSONSerializable["ConfigurationInternal"]):
     @override
     def from_json(cls, json_map: Dict[str, Any]) -> Self:
         """Returns a configuration from the given JSON string."""
-        if cls.__name__ != json_map.get("_type", None):
+        # Avoid multiple dict .get() and string comparisons by pre-fetching _type
+        cls_name = cls.__name__
+        json_type = json_map.get("_type")
+        if cls_name != json_type:
             raise ValueError(
-                f"Trying to instantiate configuration of type {cls.__name__} from JSON with type {json_map['_type']}"
+                f"Trying to instantiate configuration of type {cls_name} from JSON with type {json_map['_type']}"
             )
-        parameters = []
-        for name, value in json_map.items():
-            # Type value is only for storage
-            if name == "_type":
-                continue
-            parameters.append(ConfigurationParameter(name=name, value=value))
+
+        # Pre-size the list of parameters for minor performance gain when many parameters
+        parameters = [
+            ConfigurationParameter(name=name, value=value)
+            for name, value in json_map.items()
+            if name != "_type"
+        ]
         return cls(parameters=parameters)
 
 
