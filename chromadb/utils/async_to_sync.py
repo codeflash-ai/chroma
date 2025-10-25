@@ -15,7 +15,6 @@ def async_to_sync(func: Callable[P, Coroutine[Any, Any, R]]) -> Callable[P, R]:
     """
 
     def sync_wrapper(*args, **kwargs):  # type: ignore
-        loop = None
         try:
             loop = asyncio.get_event_loop()
         except RuntimeError:
@@ -28,16 +27,16 @@ def async_to_sync(func: Callable[P, Coroutine[Any, Any, R]]) -> Callable[P, R]:
         result = loop.run_until_complete(func(*args, **kwargs))
 
         def convert_result(result: Any) -> Any:
+            if result is None or isinstance(result, (int, float, str, bytes, bool)):
+                return result
+
             if isinstance(result, list):
                 return [convert_result(r) for r in result]
-
-            if isinstance(result, object):
-                return async_class_to_sync(result)
 
             if callable(result):
                 return async_to_sync(result)
 
-            return result
+            return async_class_to_sync(result)
 
         return convert_result(result)
 
