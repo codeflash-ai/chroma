@@ -34,13 +34,19 @@ class OtelInterceptor(
     grpc.StreamStreamClientInterceptor,
 ):
     def _intercept_call(self, continuation, client_call_details, request_or_iterator):
-        from chromadb.telemetry.opentelemetry import tracer
+        tracer = self.__dict__.get("__tracer")
+        if tracer is None:
+            from chromadb.telemetry.opentelemetry import tracer as _tracer
+
+            self.__dict__["__tracer"] = _tracer
+            tracer = _tracer
 
         if tracer is None:
             return continuation(client_call_details, request_or_iterator)
         with tracer.start_as_current_span(
             f"RPC {client_call_details.method}", kind=SpanKind.CLIENT
         ) as span:
+            span_context = span.get_span_context()
             # Prepare metadata for propagation
             metadata = (
                 client_call_details.metadata[:] if client_call_details.metadata else []
@@ -49,9 +55,9 @@ class OtelInterceptor(
                 [
                     (
                         "chroma-traceid",
-                        _encode_trace_id(span.get_span_context().trace_id),
+                        _encode_trace_id(span_context.trace_id),
                     ),
-                    ("chroma-spanid", _encode_span_id(span.get_span_context().span_id)),
+                    ("chroma-spanid", _encode_span_id(span_context.span_id)),
                 ]
             )
             # Update client call details with new metadata
@@ -66,11 +72,12 @@ class OtelInterceptor(
                 # Set attributes based on the result
                 if hasattr(result, "details") and result.details():
                     span.set_attribute("rpc.detail", result.details())
-                span.set_attribute("rpc.status_code", result.code().name.lower())
-                span.set_attribute("rpc.status_code_value", result.code().value[0])
+                code = result.code()
+                span.set_attribute("rpc.status_code", code.name.lower())
+                span.set_attribute("rpc.status_code_value", code.value[0])
                 # Set span status based on gRPC call result
-                if result.code() != grpc.StatusCode.OK:
-                    span.set_status(StatusCode.ERROR, description=str(result.code()))
+                if code != grpc.StatusCode.OK:
+                    span.set_status(StatusCode.ERROR, description=str(code))
                 return result
             except Exception as e:
                 # Log exception details and re-raise
