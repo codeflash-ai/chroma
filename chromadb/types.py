@@ -169,10 +169,16 @@ class Collection(
 
     def get_model_fields(self) -> Dict[Any, Any]:
         """Used for backward compatibility with Pydantic 1.x"""
+        cls = type(self)
+        cached = getattr(cls, "_cached_model_fields", None)
+        if cached is not None:
+            return cached
         try:
-            return type(self).model_fields  # pydantic 2.x, pydantic 3.x
+            fields = cls.model_fields  # pydantic 2.x, pydantic 3.x
         except AttributeError:
-            return self.__fields__  # pydantic 1.x
+            fields = self.__fields__  # pydantic 1.x
+        cls._cached_model_fields = fields
+        return fields
 
     @classmethod
     @override
