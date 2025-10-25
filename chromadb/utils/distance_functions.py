@@ -23,7 +23,9 @@ def cosine(x: Vector, y: Vector) -> float:
     return cast(
         float,
         (
-            1.0 - np.dot(x, y) / ((np.linalg.norm(x) * np.linalg.norm(y)) + NORM_EPS)
+            1.0
+            - np.dot(x, y)
+            / ((np.sqrt(np.dot(x, x)) * np.sqrt(np.dot(y, y))) + NORM_EPS)
         ).item(),
     )
 
