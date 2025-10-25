@@ -436,21 +436,30 @@ def populate_create_hnsw_defaults(
     config: CreateHNSWConfiguration, ef: Optional[EmbeddingFunction] = None  # type: ignore
 ) -> CreateHNSWConfiguration:
     """Populate a CreateHNSW configuration with default values"""
-    if config.get("space") is None:
+    get = config.get
+    space = get("space")
+    if space is None:
         config["space"] = ef.default_space() if ef else "l2"
-    if config.get("ef_construction") is None:
+    ef_construction = get("ef_construction")
+    if ef_construction is None:
         config["ef_construction"] = 100
-    if config.get("max_neighbors") is None:
+    max_neighbors = get("max_neighbors")
+    if max_neighbors is None:
         config["max_neighbors"] = 16
-    if config.get("ef_search") is None:
+    ef_search = get("ef_search")
+    if ef_search is None:
         config["ef_search"] = 100
-    if config.get("num_threads") is None:
+    num_threads = get("num_threads")
+    if num_threads is None:
         config["num_threads"] = cpu_count()
-    if config.get("batch_size") is None:
+    batch_size = get("batch_size")
+    if batch_size is None:
         config["batch_size"] = 100
-    if config.get("sync_threshold") is None:
+    sync_threshold = get("sync_threshold")
+    if sync_threshold is None:
         config["sync_threshold"] = 1000
-    if config.get("resize_factor") is None:
+    resize_factor = get("resize_factor")
+    if resize_factor is None:
         config["resize_factor"] = 1.2
     return config
 
@@ -639,15 +648,14 @@ def overwrite_hnsw_configuration(
     """Overwrite a HNSWConfiguration with a new configuration"""
     # Create a copy of the existing config and update with new values
     result = dict(existing_hnsw_config)
-    update_fields = [
+
+    for field in (
         "ef_search",
         "num_threads",
         "batch_size",
         "sync_threshold",
         "resize_factor",
-    ]
-
-    for field in update_fields:
+    ):
         if field in update_hnsw_config:
             result[field] = update_hnsw_config[field]  # type: ignore
 
