@@ -436,21 +436,22 @@ def populate_create_hnsw_defaults(
     config: CreateHNSWConfiguration, ef: Optional[EmbeddingFunction] = None  # type: ignore
 ) -> CreateHNSWConfiguration:
     """Populate a CreateHNSW configuration with default values"""
-    if config.get("space") is None:
+    get = config.get
+    if get("space") is None:
         config["space"] = ef.default_space() if ef else "l2"
-    if config.get("ef_construction") is None:
+    if get("ef_construction") is None:
         config["ef_construction"] = 100
-    if config.get("max_neighbors") is None:
+    if get("max_neighbors") is None:
         config["max_neighbors"] = 16
-    if config.get("ef_search") is None:
+    if get("ef_search") is None:
         config["ef_search"] = 100
-    if config.get("num_threads") is None:
+    if get("num_threads") is None:
         config["num_threads"] = cpu_count()
-    if config.get("batch_size") is None:
+    if get("batch_size") is None:
         config["batch_size"] = 100
-    if config.get("sync_threshold") is None:
+    if get("sync_threshold") is None:
         config["sync_threshold"] = 1000
-    if config.get("resize_factor") is None:
+    if get("resize_factor") is None:
         config["resize_factor"] = 1.2
     return config
 
