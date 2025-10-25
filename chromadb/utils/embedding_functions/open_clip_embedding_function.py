@@ -13,7 +13,6 @@ from chromadb.api.types import (
 )
 from typing import List, Dict, Any, Union, Optional, cast
 import numpy as np
-import importlib
 
 
 class OpenCLIPEmbeddingFunction(EmbeddingFunction[Embeddable]):
@@ -46,14 +45,18 @@ class OpenCLIPEmbeddingFunction(EmbeddingFunction[Embeddable]):
             )
 
         try:
-            self._torch = importlib.import_module("torch")
+            import torch
+
+            self._torch = torch
         except ImportError:
             raise ValueError(
                 "The torch python package is not installed. Please install it with `pip install torch`"
             )
 
         try:
-            self._PILImage = importlib.import_module("PIL.Image")
+            from PIL import Image as PILImage
+
+            self._PILImage = PILImage
         except ImportError:
             raise ValueError(
                 "The PIL python package is not installed. Please install it with `pip install pillow`"
