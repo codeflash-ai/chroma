@@ -1,17 +1,22 @@
-from typing import TypedDict, Dict, Any, Optional, cast, get_args
 import json
+import warnings
+from multiprocessing import cpu_count
+from typing import Any, Dict, Optional, TypedDict, cast, get_args
+
+from line_profiler import profile as codeflash_line_profile
+
+codeflash_line_profile.enable(output_prefix="/tmp/codeflash_lmo9tuqf/baseline_lprof")
+
 from chromadb.api.types import (
-    Space,
     CollectionMetadata,
-    UpdateMetadata,
     EmbeddingFunction,
+    Space,
+    UpdateMetadata,
 )
 from chromadb.utils.embedding_functions import (
     known_embedding_functions,
     register_embedding_function,
 )
-from multiprocessing import cpu_count
-import warnings
 
 
 class HNSWConfiguration(TypedDict, total=False):
@@ -265,20 +270,32 @@ def create_collection_configuration_from_legacy_metadata_dict(
     metadata: Dict[str, Any],
 ) -> CreateCollectionConfiguration:
     """Create a CreateCollectionConfiguration from legacy collection metadata"""
-    old_to_new = {
-        "hnsw:space": "space",
-        "hnsw:construction_ef": "ef_construction",
-        "hnsw:M": "max_neighbors",
-        "hnsw:search_ef": "ef_search",
-        "hnsw:num_threads": "num_threads",
-        "hnsw:batch_size": "batch_size",
-        "hnsw:sync_threshold": "sync_threshold",
-        "hnsw:resize_factor": "resize_factor",
+    # Move old_to_new to a global constant to avoid re-creating the dict every call.
+    # This avoids unnecessary repeated allocations and dictionary construction.
+    global _OLD_TO_NEW
+    if "_OLD_TO_NEW" not in globals():
+        _OLD_TO_NEW = {
+            "hnsw:space": "space",
+            "hnsw:construction_ef": "ef_construction",
+            "hnsw:M": "max_neighbors",
+            "hnsw:search_ef": "ef_search",
+            "hnsw:num_threads": "num_threads",
+            "hnsw:batch_size": "batch_size",
+            "hnsw:sync_threshold": "sync_threshold",
+            "hnsw:resize_factor": "resize_factor",
+        }
+    old_to_new = _OLD_TO_NEW
+
+    # Use dictionary comprehension for more efficient mapping and fewer lookups.
+    json_map = {
+        new_key: metadata[old_key]
+        for old_key, new_key in old_to_new.items()
+        if old_key in metadata
     }
-    json_map = {}
-    for name, value in metadata.items():
-        if name in old_to_new:
-            json_map[old_to_new[name]] = value
+
+    # Note: Only the keys present in metadata and in old_to_new will be processed, as in the original loop.
+    # This avoids unnecessary checks per metadata key.
+
     hnsw_config = json_to_create_hnsw_configuration(json_map)
     hnsw_config = populate_create_hnsw_defaults(hnsw_config)
 
@@ -604,31 +621,36 @@ def load_update_collection_configuration_from_json(
     json_map: Dict[str, Any]
 ) -> UpdateCollectionConfiguration:
     """Convert a JSON dict to an UpdateCollectionConfiguration"""
-    if json_map.get("hnsw") is not None and json_map.get("spann") is not None:
+    # Use fast local lookups, avoid repeated get lookups and reduce attribute access cost
+    hnsw = json_map.get("hnsw", None)
+    spann = json_map.get("spann", None)
+    embedding_function_json = json_map.get("embedding_function", None)
+
+    if hnsw is not None and spann is not None:
         raise ValueError("hnsw and spann cannot both be provided")
 
     result = UpdateCollectionConfiguration()
 
-    # Handle vector index configurations
-    if json_map.get("hnsw") is not None:
-        result["hnsw"] = json_to_update_hnsw_configuration(json_map["hnsw"])
+    if hnsw is not None:
+        result["hnsw"] = json_to_update_hnsw_configuration(hnsw)
 
-    if json_map.get("spann") is not None:
-        result["spann"] = json_to_update_spann_configuration(json_map["spann"])
+    if spann is not None:
+        result["spann"] = json_to_update_spann_configuration(spann)
 
-    # Handle embedding function
-    if json_map.get("embedding_function") is not None:
-        if json_map["embedding_function"]["type"] == "legacy":
+    if embedding_function_json is not None:
+        embedding_type = embedding_function_json.get("type", None)
+        if embedding_type == "legacy":
             warnings.warn(
                 "legacy embedding function config",
                 DeprecationWarning,
                 stacklevel=2,
             )
         else:
-            ef = known_embedding_functions[json_map["embedding_function"]["name"]]
-            result["embedding_function"] = ef.build_from_config(
-                json_map["embedding_function"]["config"]
-            )
+            ef_name = embedding_function_json["name"]
+            ef_config = embedding_function_json["config"]
+            # Avoid global lookup inside branch
+            ef = known_embedding_functions[ef_name]
+            result["embedding_function"] = ef.build_from_config(ef_config)
 
     return result
 
