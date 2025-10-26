@@ -11,6 +11,7 @@ from overrides import EnforceOverrides
 from overrides import override
 from typing_extensions import Literal
 import platform
+from pydantic.v1 import BaseSettings
 
 in_pydantic_v2 = False
 try:
@@ -307,7 +308,9 @@ class Settings(BaseSettings):  # type: ignore
     def require(self, key: str) -> Any:
         """Return the value of a required config key, or raise an exception if it is not
         set"""
-        val = self[key]
+        val = getattr(self, key)
+        if isinstance(val, str) and val in _legacy_config_values:
+            raise ValueError(LEGACY_ERROR)
         if val is None:
             raise ValueError(f"Missing required config value '{key}'")
         return val
