@@ -1053,12 +1053,10 @@ def serialize_metadata(metadata: Optional[Metadata]) -> Optional[Dict[str, Any]]
     if metadata is None:
         return None
 
-    result: Dict[str, Any] = {}
+    result: Dict[str, Any] = metadata.copy()
     for key, value in metadata.items():
         if isinstance(value, SparseVector):
             result[key] = value.to_dict()
-        else:
-            result[key] = value
     return result
 
 
