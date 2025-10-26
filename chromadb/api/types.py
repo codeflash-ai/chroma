@@ -318,11 +318,10 @@ Images = List[Image]
 
 
 def is_image(target: Any) -> bool:
-    if not isinstance(target, np.ndarray):
-        return False
-    if len(target.shape) < 2:
-        return False
-    return True
+    # Combine checks for minimum shape length in one branch for efficiency
+    if isinstance(target, np.ndarray):
+        return target.ndim >= 2
+    return False
 
 
 class BaseRecordSet(TypedDict):
