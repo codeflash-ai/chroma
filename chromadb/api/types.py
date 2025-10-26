@@ -130,10 +130,12 @@ OneOrMany = Union[T, List[T]]
 
 
 def maybe_cast_one_to_many(target: Optional[OneOrMany[T]]) -> Optional[List[T]]:
-    if target is None:
-        return None
+    # Check explicitly for list type first for fast path
     if isinstance(target, list):
         return target
+    # Check for None before wrapping target
+    if target is None:
+        return None
     return [target]
 
 
