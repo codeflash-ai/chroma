@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Union
+from typing import Tuple, Dict, Optional, Union
 import logging
 from chromadb.api.client import Client as ClientCreator
 from chromadb.api.client import (
@@ -101,6 +101,8 @@ __all__ = [
 
 from chromadb.types import CloudClientArg
 
+_SETTINGS_CACHE_SIZE = 32
+
 logger = logging.getLogger(__name__)
 
 __settings = Settings()
@@ -136,6 +138,10 @@ if not is_client:
             # In Colab, hotswap to pysqlite-binary if it's too old
             import subprocess
             import sys
+
+            _settings_cache: Dict[
+                Tuple[str, int, bool, Optional[Dict[str, str]]], Settings
+            ] = {}
 
             subprocess.check_call(
                 [sys.executable, "-m", "pip", "install", "pysqlite3-binary"]
@@ -317,15 +323,24 @@ async def AsyncHttpClient(
         database: The database to use for this client. Defaults to the default database.
     """
 
-    if settings is None:
-        settings = Settings()
-
-    # Make sure parameters are the correct types -- users can pass anything.
+    # Ensure types before caching
     host = str(host)
     port = int(port)
     ssl = bool(ssl)
     tenant = str(tenant)
     database = str(database)
+
+    # Instantiate and cache Settings if not provided
+    if settings is None:
+        cache_key = _settings_cache_key(host, port, ssl, headers)
+        settings = _settings_cache.get(cache_key)
+        if settings is None:
+            settings = Settings()
+            # LRU: evict oldest if over capacity
+            if len(_settings_cache) >= _SETTINGS_CACHE_SIZE:
+                # Remove first inserted key (not strictly LRU, but worth for perf/memory)
+                _settings_cache.pop(next(iter(_settings_cache)))
+            _settings_cache[cache_key] = settings
 
     settings.chroma_api_impl = "chromadb.api.async_fastapi.AsyncFastAPI"
     if settings.chroma_server_host and settings.chroma_server_host != host:
@@ -437,3 +452,14 @@ def AdminClient(settings: Settings = Settings()) -> AdminAPI:
 
     """
     return AdminClientCreator(settings=settings)
+
+
+def _settings_cache_key(
+    host: str, port: int, ssl: bool, headers: Optional[Dict[str, str]]
+) -> Tuple[str, int, bool, Optional[Tuple[Tuple[str, str], ...]]]:
+    # Convert headers dict to a hashable tuple, or None.
+    if headers is not None:
+        headers_tuple = tuple(sorted(headers.items()))
+    else:
+        headers_tuple = None
+    return (host, port, ssl, headers_tuple)

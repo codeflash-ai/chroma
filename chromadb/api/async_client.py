@@ -67,12 +67,6 @@ class AsyncClient(SharedSystemClient, AsyncClientAPI):
         self = cls(settings=settings)
         SharedSystemClient._populate_data_from_system(self._system)
 
-        self.tenant = tenant
-        self.database = database
-
-        # Get the root system component we want to interact with
-        self._server = self._system.instance(AsyncServerAPI)
-
         user_identity = await self.get_user_identity()
 
         maybe_tenant, maybe_database = maybe_set_tenant_and_database(
@@ -81,10 +75,13 @@ class AsyncClient(SharedSystemClient, AsyncClientAPI):
             user_provided_tenant=tenant,
             user_provided_database=database,
         )
-        if maybe_tenant:
-            self.tenant = maybe_tenant
-        if maybe_database:
-            self.database = maybe_database
+
+        # Assign resolved tenant and database once
+        self.tenant = maybe_tenant if maybe_tenant else tenant
+        self.database = maybe_database if maybe_database else database
+
+        # Get the root system component we want to interact with
+        self._server = self._system.instance(AsyncServerAPI)
 
         self._admin_client = AsyncAdminClient.from_system(self._system)
         await self._validate_tenant_database(tenant=self.tenant, database=self.database)
