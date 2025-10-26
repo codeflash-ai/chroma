@@ -269,24 +269,36 @@ def HttpClient(
     if settings is None:
         settings = Settings()
 
-    # Make sure parameters are the correct types -- users can pass anything.
-    host = str(host)
-    port = int(port)
-    ssl = bool(ssl)
-    tenant = str(tenant)
-    database = str(database)
+    # Convert inputs only if necessary (skip needless str/int/bool if already correct).
+    if not isinstance(host, str):
+        host = str(host)
+    if not isinstance(port, int):
+        port = int(port)
+    if not isinstance(ssl, bool):
+        ssl = bool(ssl)
+    if not isinstance(tenant, str):
+        tenant = str(tenant)
+    if not isinstance(database, str):
+        database = str(database)
 
+    # Set API implementation unconditionally (as original).
     settings.chroma_api_impl = "chromadb.api.fastapi.FastAPI"
-    if settings.chroma_server_host and settings.chroma_server_host != host:
+
+    # Check explicitly only if the property is not None (saves unneeded string comparison)
+    existing_host = getattr(settings, "chroma_server_host", None)
+    if existing_host is not None and existing_host != host:
         raise ValueError(
-            f"Chroma server host provided in settings[{settings.chroma_server_host}] is different to the one provided in HttpClient: [{host}]"
+            f"Chroma server host provided in settings[{existing_host}] is different to the one provided in HttpClient: [{host}]"
         )
     settings.chroma_server_host = host
-    if settings.chroma_server_http_port and settings.chroma_server_http_port != port:
+
+    existing_port = getattr(settings, "chroma_server_http_port", None)
+    if existing_port is not None and existing_port != port:
         raise ValueError(
-            f"Chroma server http port provided in settings[{settings.chroma_server_http_port}] is different to the one provided in HttpClient: [{port}]"
+            f"Chroma server http port provided in settings[{existing_port}] is different to the one provided in HttpClient: [{port}]"
         )
     settings.chroma_server_http_port = port
+
     settings.chroma_server_ssl_enabled = ssl
     settings.chroma_server_headers = headers
 
