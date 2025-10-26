@@ -1312,16 +1312,16 @@ def validate_sparse_vectors(vectors: SparseVectors) -> SparseVectors:
     happens automatically in SparseVector.__post_init__ when each instance is created.
     This function only validates the list structure and instance types.
     """
-    if not isinstance(vectors, list):
+    if type(vectors) is not list:
         raise ValueError(
             f"Expected sparse vectors to be a list, got {type(vectors).__name__}"
         )
-    if len(vectors) == 0:
+    if not vectors:
         raise ValueError(
             f"Expected sparse vectors to be a non-empty list, got {len(vectors)} sparse vectors"
         )
     for i, vector in enumerate(vectors):
-        if not isinstance(vector, SparseVector):
+        if type(vector) is not SparseVector:
             raise ValueError(
                 f"Expected SparseVector instance at position {i}, got {type(vector).__name__}"
             )
