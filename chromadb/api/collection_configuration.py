@@ -759,17 +759,14 @@ def validate_embedding_function_conflict_on_create(
     Returns:
         bool: True if there is a conflict, False otherwise
     """
-    # If ef provided in function params and collection config, check if they are the same
-    # If not, there's a conflict
-    # ef is by default "default" if not provided, so ignore that case.
     if embedding_function is not None and configuration_ef is not None:
-        if (
-            embedding_function.name() != "default"
-            and embedding_function.name() != configuration_ef.name()
-        ):
-            raise ValueError(
-                f"Multiple embedding functions provided. Please provide only one. Embedding function conflict: {embedding_function.name()} vs {configuration_ef.name()}"
-            )
+        ef_name = embedding_function.name()
+        if ef_name != "default":
+            conf_ef_name = configuration_ef.name()
+            if ef_name != conf_ef_name:
+                raise ValueError(
+                    f"Multiple embedding functions provided. Please provide only one. Embedding function conflict: {ef_name} vs {conf_ef_name}"
+                )
     return None
 
 
