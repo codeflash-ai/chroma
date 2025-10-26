@@ -19,7 +19,7 @@ class Bm25EmbeddingFunction(SparseEmbeddingFunction[Documents]):
     def __init__(
         self,
         avg_len: Optional[float] = None,
-        task: Optional[TaskType] = "document",
+        task: Optional["TaskType"] = "document",
         cache_dir: Optional[str] = None,
         k: Optional[float] = None,
         b: Optional[float] = None,
@@ -27,7 +27,7 @@ class Bm25EmbeddingFunction(SparseEmbeddingFunction[Documents]):
         token_max_length: Optional[int] = None,
         disable_stemmer: Optional[bool] = None,
         specific_model_path: Optional[str] = None,
-        query_config: Optional[Bm25EmbeddingFunctionQueryConfig] = None,
+        query_config: Optional["Bm25EmbeddingFunctionQueryConfig"] = None,
         **kwargs: Any,
     ):
         """Initialize SparseEncoderEmbeddingFunction.
@@ -45,12 +45,15 @@ class Bm25EmbeddingFunction(SparseEmbeddingFunction[Documents]):
             query_config (dict, optional): Configuration for the query, can be "task"
             **kwargs: Additional arguments to pass to the Bm25 model.
         """
-        try:
-            from fastembed.sparse.bm25 import Bm25
-        except ImportError:
-            raise ValueError(
-                "The fastembed python package is not installed. Please install it with `pip install fastembed`"
-            )
+        # Only import Bm25 just once at class load time for efficiency (not at every instantiation)
+        if not hasattr(Bm25EmbeddingFunction, "_Bm25"):
+            try:
+                from fastembed.sparse.bm25 import Bm25
+            except ImportError:
+                raise ValueError(
+                    "The fastembed python package is not installed. Please install it with `pip install fastembed`"
+                )
+            Bm25EmbeddingFunction._Bm25 = Bm25
 
         self.task = task
         self.query_config = query_config
@@ -62,28 +65,31 @@ class Bm25EmbeddingFunction(SparseEmbeddingFunction[Documents]):
         self.token_max_length = token_max_length
         self.disable_stemmer = disable_stemmer
         self.specific_model_path = specific_model_path
+
+        # Collect and validate kwargs only once
         for key, value in kwargs.items():
             if not isinstance(value, (str, int, float, bool, list, dict, tuple)):
                 raise ValueError(f"Keyword argument {key} is not a primitive type")
         self.kwargs = kwargs
-        bm25_kwargs = {
-            "model_name": "Qdrant/bm25",
-        }
-        optional_params = {
-            "cache_dir": cache_dir,
-            "k": k,
-            "b": b,
-            "avg_len": avg_len,
-            "language": language,
-            "token_max_length": token_max_length,
-            "disable_stemmer": disable_stemmer,
-            "specific_model_path": specific_model_path,
-        }
-        for key, value in optional_params.items():
-            if value is not None:
-                bm25_kwargs[key] = value
+
+        bm25_kwargs = {"model_name": "Qdrant/bm25"}
+
+        # Use a single update, instead of looping, for optional_params
+        optional_params = (
+            ("cache_dir", cache_dir),
+            ("k", k),
+            ("b", b),
+            ("avg_len", avg_len),
+            ("language", language),
+            ("token_max_length", token_max_length),
+            ("disable_stemmer", disable_stemmer),
+            ("specific_model_path", specific_model_path),
+        )
+        bm25_kwargs.update({k: v for k, v in optional_params if v is not None})
+
+        # Update with non-None additional kwargs
         bm25_kwargs.update({k: v for k, v in kwargs.items() if v is not None})
-        self._model = Bm25(**bm25_kwargs)
+        self._model = Bm25EmbeddingFunction._Bm25(**bm25_kwargs)
 
     def __call__(self, input: Documents) -> SparseVectors:
         """Generate embeddings for the given documents.
