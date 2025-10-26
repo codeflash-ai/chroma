@@ -64,16 +64,19 @@ class SegmentLRUCache(BasicCache):
         self.capacity = capacity
         self.size_func = size_func
         self.cache: Dict[uuid.UUID, Segment] = {}
-        self.history = []
+        # Use a dict to maintain LRU order and O(1) upsert/remove
+        self.history: Dict[uuid.UUID, None] = {}
         self.callback = callback
         self.lock = threading.RLock()
+        # Maintain running sizes for O(1) queries and updates
+        self.key_sizes: Dict[uuid.UUID, int] = {}
+        self.total_size: int = 0
 
     def _upsert_key(self, key: uuid.UUID):
+        # Remove and re-insert to move to end for LRU order (preserved order in Python 3.7+ dicts)
         if key in self.history:
-            self.history.remove(key)
-            self.history.append(key)
-        else:
-            self.history.append(key)
+            self.history.pop(key)
+        self.history[key] = None
 
     @override
     def get(self, key: uuid.UUID) -> Optional[Segment]:
@@ -97,19 +100,21 @@ class SegmentLRUCache(BasicCache):
             if key in self.cache:
                 return
             item_size = self.size_func(key)
-            key_sizes = {key: self.size_func(key) for key in self.cache}
-            total_size = sum(key_sizes.values())
-            index = 0
-            # Evict items if capacity is exceeded
-            while total_size + item_size > self.capacity and len(self.history) > index:
-                key_delete = self.history[index]
+
+            # Evict items if capacity is exceeded (O(1) per item)
+            while self.total_size + item_size > self.capacity and self.history:
+                # FIFO order for oldest (LRU) key: get the first key
+                key_delete = next(iter(self.history))
                 if key_delete in self.cache:
                     self.callback(key_delete, self.cache[key_delete])
                     del self.cache[key_delete]
-                    total_size -= key_sizes[key_delete]
-                index += 1
+                    size_deleted = self.key_sizes.pop(key_delete)
+                    self.total_size -= size_deleted
+                self.history.pop(key_delete)
 
             self.cache[key] = value
+            self.key_sizes[key] = item_size
+            self.total_size += item_size
             self._upsert_key(key)
 
     @override
