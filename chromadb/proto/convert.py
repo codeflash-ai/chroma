@@ -217,13 +217,14 @@ def to_proto_metadata_update_value(
     # Be careful with the order here. Since bools are a subtype of int in python,
     # isinstance(value, bool) and isinstance(value, int) both return true
     # for a value of bool type.
-    if isinstance(value, bool):
+    t = type(value)
+    if t is bool:
         return chroma_pb.UpdateMetadataValue(bool_value=value)
-    elif isinstance(value, str):
+    elif t is str:
         return chroma_pb.UpdateMetadataValue(string_value=value)
-    elif isinstance(value, int):
+    elif t is int:
         return chroma_pb.UpdateMetadataValue(int_value=value)
-    elif isinstance(value, float):
+    elif t is float:
         return chroma_pb.UpdateMetadataValue(float_value=value)
     # None is used to delete the metadata key.
     elif value is None:
