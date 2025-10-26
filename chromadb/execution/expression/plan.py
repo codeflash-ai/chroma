@@ -103,13 +103,11 @@ class Search:
                    Can be a Limit object, a dict for Limit.from_dict(), or an int
                    When passing an int, it creates Limit(limit=value, offset=0)
             select: Select configuration for keys (defaults to empty selection)
-                    Can be a Select object, a dict for Select.from_dict(), 
+                    Can be a Select object, a dict for Select.from_dict(),
                     or a list/set of strings (e.g., ["#document", "#score"])
         """
         # Handle where parameter
-        if where is None:
-            self._where = None
-        elif isinstance(where, Where):
+        if where is None or isinstance(where, Where):
             self._where = where
         elif isinstance(where, dict):
             self._where = Where.from_dict(where)
@@ -117,11 +115,9 @@ class Search:
             raise TypeError(
                 f"where must be a Where object, dict, or None, got {type(where).__name__}"
             )
-        
+
         # Handle rank parameter
-        if rank is None:
-            self._rank = None
-        elif isinstance(rank, Rank):
+        if rank is None or isinstance(rank, Rank):
             self._rank = rank
         elif isinstance(rank, dict):
             self._rank = Rank.from_dict(rank)
@@ -129,21 +125,22 @@ class Search:
             raise TypeError(
                 f"rank must be a Rank object, dict, or None, got {type(rank).__name__}"
             )
-        
+
         # Handle limit parameter
         if limit is None:
             self._limit = Limit()
         elif isinstance(limit, Limit):
             self._limit = limit
         elif isinstance(limit, int):
-            self._limit = Limit.from_dict({"limit": limit, "offset": 0})
+            # Avoid extra dict creation and method lookup: direct construction
+            self._limit = Limit(limit=limit, offset=0)
         elif isinstance(limit, dict):
             self._limit = Limit.from_dict(limit)
         else:
             raise TypeError(
                 f"limit must be a Limit object, dict, int, or None, got {type(limit).__name__}"
             )
-        
+
         # Handle select parameter
         if select is None:
             self._select = Select()
@@ -153,7 +150,9 @@ class Search:
             self._select = Select.from_dict(select)
         elif isinstance(select, (list, set)):
             # Convert list/set of strings to Select object
-            self._select = Select.from_dict({"keys": list(select)})
+            # Use set() directly to avoid duplicate entries before conversion, faster than list for large input
+            # This avoids overhead of multiple conversions; use keys as-is
+            self._select = Select(keys=set(select))
         else:
             raise TypeError(
                 f"select must be a Select object, dict, list, set, or None, got {type(select).__name__}"
@@ -185,10 +184,11 @@ class Search:
         Returns:
             New Search object with updated select configuration
         """
+        # Avoid dict/list conversion, pass set directly for faster construction
+        # No need to convert to list for Select; Select already supports set input
         new_select = Select(keys=set(keys))
-        return Search(
-            where=self._where, rank=self._rank, limit=self._limit, select=new_select
-        )
+        # Fast direct invocation, avoid keyword parameter unpacking overhead
+        return Search(self._where, self._rank, self._limit, new_select)
 
     def where(self, where: Optional[Union[Where, Dict[str, Any]]]) -> "Search":
         """Set the where clause for filtering
@@ -213,9 +213,12 @@ class Search:
             raise TypeError(
                 f"where must be a Where object, dict, or None, got {type(where).__name__}"
             )
-        
+
         return Search(
-            where=converted_where, rank=self._rank, limit=self._limit, select=self._select
+            where=converted_where,
+            rank=self._rank,
+            limit=self._limit,
+            select=self._select,
         )
 
     def rank(self, rank_expr: Optional[Union[Rank, Dict[str, Any]]]) -> "Search":
@@ -242,9 +245,12 @@ class Search:
             raise TypeError(
                 f"rank_expr must be a Rank object, dict, or None, got {type(rank_expr).__name__}"
             )
-        
+
         return Search(
-            where=self._where, rank=converted_rank, limit=self._limit, select=self._select
+            where=self._where,
+            rank=converted_rank,
+            limit=self._limit,
+            select=self._select,
         )
 
     def limit(self, limit: int, offset: int = 0) -> "Search":
