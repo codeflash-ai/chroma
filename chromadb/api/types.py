@@ -53,6 +53,8 @@ from functools import lru_cache
 import struct
 import math
 
+_cached_protocol_signature = None
+
 # Re-export types from chromadb.types
 __all__ = [
     "Metadata",
@@ -1480,16 +1482,25 @@ def validate_sparse_embedding_function(
     sparse_vector_function: SparseEmbeddingFunction[Embeddable],
 ) -> None:
     """Validate that a sparse vector function conforms to the SparseEmbeddingFunction protocol."""
-    function_signature = signature(
-        sparse_vector_function.__class__.__call__
-    ).parameters.keys()
-    protocol_signature = signature(SparseEmbeddingFunction.__call__).parameters.keys()
+    function_signature = tuple(
+        signature(sparse_vector_function.__class__.__call__).parameters.keys()
+    )
+    protocol_signature = _get_protocol_signature()
 
     if not function_signature == protocol_signature:
         raise ValueError(
             f"Expected SparseEmbeddingFunction.__call__ to have the following signature: {protocol_signature}, got {function_signature}\n"
             "Please see https://docs.trychroma.com/guides/embeddings for details of the SparseEmbeddingFunction interface.\n"
         )
+
+
+def _get_protocol_signature():
+    global _cached_protocol_signature
+    if _cached_protocol_signature is None:
+        _cached_protocol_signature = tuple(
+            signature(SparseEmbeddingFunction.__call__).parameters.keys()
+        )
+    return _cached_protocol_signature
 
 
 # Index Configuration Types for Collection Schema
