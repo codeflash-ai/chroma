@@ -1017,24 +1017,33 @@ def validate_metadata(metadata: Metadata) -> Metadata:
 
 def validate_update_metadata(metadata: UpdateMetadata) -> UpdateMetadata:
     """Validates metadata to ensure it is a dictionary of strings to strings, ints, floats, bools, or SparseVectors"""
-    if not isinstance(metadata, dict) and metadata is not None:
+    # Early exit for valid None
+    if metadata is None:
+        return metadata
+    # Check metadata is dict
+    if not isinstance(metadata, dict):
         raise ValueError(
             f"Expected metadata to be a dict or None, got {type(metadata)}"
         )
-    if metadata is None:
-        return metadata
-    if len(metadata) == 0:
+    # Check dict non-empty
+    if not metadata:
         raise ValueError(f"Expected metadata to be a non-empty dict, got {metadata}")
+
+    # Avoid repeated isinstance checks using local references and combine boolean logic
+    SparseVectorType = SparseVector
+    allowed_types = (str, int, float, type(None))
     for key, value in metadata.items():
-        if not isinstance(key, str):
+        # Check key type
+        if type(key) is not str:
+            # Slightly faster than isinstance for expected case due to class identity
             raise ValueError(f"Expected metadata key to be a str, got {key}")
-        # Check if value is a SparseVector (validation happens in __post_init__)
-        if isinstance(value, SparseVector):
+        # Check value type: most common cases are str, int, float, bool; SparseVector is rare
+        if type(value) is bool or isinstance(value, allowed_types):
+            # allowed types, continue
+            continue
+        elif isinstance(value, SparseVectorType):
             pass  # Already validated in SparseVector.__post_init__
-        # isinstance(True, int) evaluates to True, so we need to check for bools separately
-        elif not isinstance(value, bool) and not isinstance(
-            value, (str, int, float, type(None))
-        ):
+        else:
             raise ValueError(
                 f"Expected metadata value to be a str, int, float, bool, SparseVector, or None, got {value}"
             )
