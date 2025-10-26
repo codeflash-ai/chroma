@@ -14,6 +14,10 @@ from chromadb.execution.expression.operator import (
     Key,
 )
 
+_PREDEFINED_SELECT_ALL = Select(
+    keys={Key.DOCUMENT, Key.EMBEDDING, Key.METADATA, Key.SCORE}
+)
+
 
 @dataclass
 class CountPlan:
@@ -103,7 +107,7 @@ class Search:
                    Can be a Limit object, a dict for Limit.from_dict(), or an int
                    When passing an int, it creates Limit(limit=value, offset=0)
             select: Select configuration for keys (defaults to empty selection)
-                    Can be a Select object, a dict for Select.from_dict(), 
+                    Can be a Select object, a dict for Select.from_dict(),
                     or a list/set of strings (e.g., ["#document", "#score"])
         """
         # Handle where parameter
@@ -117,7 +121,7 @@ class Search:
             raise TypeError(
                 f"where must be a Where object, dict, or None, got {type(where).__name__}"
             )
-        
+
         # Handle rank parameter
         if rank is None:
             self._rank = None
@@ -129,7 +133,7 @@ class Search:
             raise TypeError(
                 f"rank must be a Rank object, dict, or None, got {type(rank).__name__}"
             )
-        
+
         # Handle limit parameter
         if limit is None:
             self._limit = Limit()
@@ -143,7 +147,7 @@ class Search:
             raise TypeError(
                 f"limit must be a Limit object, dict, int, or None, got {type(limit).__name__}"
             )
-        
+
         # Handle select parameter
         if select is None:
             self._select = Select()
@@ -171,9 +175,11 @@ class Search:
     # Builder methods for chaining
     def select_all(self) -> "Search":
         """Select all predefined keys (document, embedding, metadata, score)"""
-        new_select = Select(keys={Key.DOCUMENT, Key.EMBEDDING, Key.METADATA, Key.SCORE})
         return Search(
-            where=self._where, rank=self._rank, limit=self._limit, select=new_select
+            where=self._where,
+            rank=self._rank,
+            limit=self._limit,
+            select=_PREDEFINED_SELECT_ALL,
         )
 
     def select(self, *keys: Union[Key, str]) -> "Search":
@@ -213,9 +219,12 @@ class Search:
             raise TypeError(
                 f"where must be a Where object, dict, or None, got {type(where).__name__}"
             )
-        
+
         return Search(
-            where=converted_where, rank=self._rank, limit=self._limit, select=self._select
+            where=converted_where,
+            rank=self._rank,
+            limit=self._limit,
+            select=self._select,
         )
 
     def rank(self, rank_expr: Optional[Union[Rank, Dict[str, Any]]]) -> "Search":
@@ -242,9 +251,12 @@ class Search:
             raise TypeError(
                 f"rank_expr must be a Rank object, dict, or None, got {type(rank_expr).__name__}"
             )
-        
+
         return Search(
-            where=self._where, rank=converted_rank, limit=self._limit, select=self._select
+            where=self._where,
+            rank=converted_rank,
+            limit=self._limit,
+            select=self._select,
         )
 
     def limit(self, limit: int, offset: int = 0) -> "Search":
