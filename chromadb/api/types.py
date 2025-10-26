@@ -227,7 +227,7 @@ def normalize_embeddings(
         if target.ndim == 1:
             return [target]
         elif target.ndim == 2:
-            return [row for row in target]
+            return list(target)
     elif isinstance(target, list):
         # One PyEmbedding
         if isinstance(target[0], (int, float)) and not isinstance(target[0], bool):
@@ -238,7 +238,14 @@ def normalize_embeddings(
             if isinstance(target[0][0], (int, float)) and not isinstance(
                 target[0][0], bool
             ):
-                return [np.array(row, dtype=np.float32) for row in target]
+                try:
+                    arr = np.asarray(target, dtype=np.float32)
+                    if arr.ndim == 2:
+                        return list(arr)
+                    else:
+                        return [np.array(row, dtype=np.float32) for row in target]
+                except Exception:
+                    return [np.array(row, dtype=np.float32) for row in target]
 
     raise ValueError(
         f"Expected embeddings to be a list of floats or ints, a list of lists, a numpy array, or a list of numpy arrays, got {target}"
