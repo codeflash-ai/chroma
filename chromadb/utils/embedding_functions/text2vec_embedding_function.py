@@ -17,15 +17,24 @@ class Text2VecEmbeddingFunction(EmbeddingFunction[Documents]):
             model_name (str, optional): The name of the model to use for text embeddings.
                 Defaults to "shibing624/text2vec-base-chinese".
         """
-        try:
-            from text2vec import SentenceModel
-        except ImportError:
+        # Move the import out of the try block for clearer error handling and potentially faster repeated initializations
+        import importlib
+
+        if importlib.util.find_spec("text2vec") is None:
             raise ValueError(
                 "The text2vec python package is not installed. Please install it with `pip install text2vec`"
             )
+        from text2vec import SentenceModel
 
         self.model_name = model_name
-        self._model = SentenceModel(model_name_or_path=model_name)
+        # SentenceModel loading can be expensive if repeatedly called with the same model_name,
+        # so reuse the model across instances if possible. Here we use a class-level cache.
+        if not hasattr(self.__class__, "_model_cache"):
+            self.__class__._model_cache = {}
+        model_cache = self.__class__._model_cache
+        if model_name not in model_cache:
+            model_cache[model_name] = SentenceModel(model_name_or_path=model_name)
+        self._model = model_cache[model_name]
 
     def __call__(self, input: Documents) -> Embeddings:
         """
