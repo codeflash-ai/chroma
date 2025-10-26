@@ -983,32 +983,42 @@ def validate_ids(ids: IDs) -> IDs:
 
 def validate_metadata(metadata: Metadata) -> Metadata:
     """Validates metadata to ensure it is a dictionary of strings to strings, ints, floats, bools, or SparseVectors"""
-    if not isinstance(metadata, dict) and metadata is not None:
+    # Fast-path exits for None and very-common cases
+    if metadata is None:
+        return metadata
+    if not isinstance(metadata, dict):
         raise ValueError(
             f"Expected metadata to be a dict or None, got {type(metadata).__name__} as metadata"
         )
-    if metadata is None:
-        return metadata
-    if len(metadata) == 0:
+    if not metadata:  # Fast check for empty dict
         raise ValueError(
             f"Expected metadata to be a non-empty dict, got {len(metadata)} metadata attributes"
         )
+
+    # Precompute commonly used types and reserved key for faster lookup
+    allowed_types = (str, int, float, type(None))
+    reserved_key = META_KEY_CHROMA_DOCUMENT
+    sparse_vector_type = SparseVector
+
+    # Convert .items() into a list only if needed, else iterate in-place.
     for key, value in metadata.items():
-        if key == META_KEY_CHROMA_DOCUMENT:
+        # Check reserved key first (most likely fail-fast scenario)
+        if key == reserved_key:
             raise ValueError(
-                f"Expected metadata to not contain the reserved key {META_KEY_CHROMA_DOCUMENT}"
+                f"Expected metadata to not contain the reserved key {reserved_key}"
             )
         if not isinstance(key, str):
             raise TypeError(
                 f"Expected metadata key to be a str, got {key} which is a {type(key).__name__}"
             )
-        # Check if value is a SparseVector (validation happens in __post_init__)
-        if isinstance(value, SparseVector):
+        # Fastest path: type checking
+        # Check SparseVector with identity before isinstance for speed
+        if type(value) is sparse_vector_type:
             pass  # Already validated in SparseVector.__post_init__
-        # isinstance(True, int) evaluates to True, so we need to check for bools separately
-        elif not isinstance(value, bool) and not isinstance(
-            value, (str, int, float, type(None))
-        ):
+        # isinstance(True, int) evaluates to True, so check for bools first
+        elif type(value) is bool or isinstance(value, allowed_types):
+            pass
+        else:
             raise ValueError(
                 f"Expected metadata value to be a str, int, float, bool, SparseVector, or None, got {value} which is a {type(value).__name__}"
             )
