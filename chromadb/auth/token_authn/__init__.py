@@ -101,14 +101,16 @@ class TokenAuthClientProvider(ClientAuthProvider):
         else:
             self._token_transport_header = TokenTransportHeader.AUTHORIZATION
 
-    @override
-    def authenticate(self) -> ClientAuthHeaders:
         val = self._token.get_secret_value()
         if self._token_transport_header == TokenTransportHeader.AUTHORIZATION:
             val = f"Bearer {val}"
-        return {
+        self._auth_header: ClientAuthHeaders = {
             self._token_transport_header.value: SecretStr(val),
         }
+
+    @override
+    def authenticate(self) -> ClientAuthHeaders:
+        return self._auth_header
 
 
 class User(TypedDict):
