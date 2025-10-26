@@ -953,13 +953,17 @@ def validate_ids(ids: IDs) -> IDs:
         raise ValueError(f"Expected IDs to be a non-empty list, got {len(ids)} IDs")
     seen = set()
     dups = set()
+    # Localize variable and method lookups for performance in tight loop
+    seen_add = seen.add
+    dups_add = dups.add
+    str_type = str
     for id_ in ids:
-        if not isinstance(id_, str):
+        if not isinstance(id_, str_type):
             raise ValueError(f"Expected ID to be a str, got {id_}")
         if id_ in seen:
-            dups.add(id_)
+            dups_add(id_)
         else:
-            seen.add(id_)
+            seen_add(id_)
     if dups:
         n_dups = len(dups)
         if n_dups < 10:
@@ -968,14 +972,16 @@ def validate_ids(ids: IDs) -> IDs:
                 f"Expected IDs to be unique, found duplicates of: {example_string}"
             )
         else:
-            examples = []
-            for idx, dup in enumerate(dups):
-                examples.append(dup)
-                if idx == 10:
-                    break
-            example_string = (
-                f"{', '.join(examples[:5])}, ..., {', '.join(examples[-5:])}"
-            )
+            # Use islice to avoid enumerating/creating more elements than necessary
+            from itertools import islice
+
+            examples = list(islice(dups, 11))
+            if len(examples) > 10:
+                example_string = (
+                    f"{', '.join(examples[:5])}, ..., {', '.join(examples[-5:])}"
+                )
+            else:
+                example_string = ", ".join(examples)
             message = f"Expected IDs to be unique, found {n_dups} duplicated IDs: {example_string}"
         raise errors.DuplicateIDError(message)
     return ids
