@@ -34,8 +34,12 @@ class Batch:
 
     def get_written_vectors(self, ids: List[str]) -> List[Vector]:
         """Get the list of vectors to write in this batch"""
+        # Optimize by minimizing repeated lookups and leveraging local variables
+        ids_to_records = self._ids_to_records
+        cast_vec = cast
+        # Avoid attribute and function lookups inside the loop
         return [
-            cast(Vector, self._ids_to_records[id]["record"]["embedding"]) for id in ids
+            cast_vec(Vector, ids_to_records[id]["record"]["embedding"]) for id in ids
         ]
 
     def get_record(self, id: str) -> LogRecord:
