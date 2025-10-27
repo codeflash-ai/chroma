@@ -5,6 +5,8 @@ import numpy as np
 from chromadb.utils.embedding_functions.schemas import validate_config_schema
 import warnings
 
+_shared_httpx_clients = {}
+
 
 class HuggingFaceEmbeddingFunction(EmbeddingFunction[Documents]):
     """
@@ -28,7 +30,7 @@ class HuggingFaceEmbeddingFunction(EmbeddingFunction[Documents]):
                 Defaults to "sentence-transformers/all-MiniLM-L6-v2".
         """
         try:
-            import httpx
+            pass
         except ImportError:
             raise ValueError(
                 "The httpx python package is not installed. Please install it with `pip install httpx`"
@@ -48,8 +50,9 @@ class HuggingFaceEmbeddingFunction(EmbeddingFunction[Documents]):
         self.model_name = model_name
 
         self._api_url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{model_name}"
-        self._session = httpx.Client()
-        self._session.headers.update({"Authorization": f"Bearer {self.api_key}"})
+
+        # Use a single global httpx.Client per model_name/api_key_env_var for huge construction perf gain
+        self._session = _get_shared_httpx_client(self._api_url, self.api_key)
 
     def __call__(self, input: Documents) -> Embeddings:
         """
@@ -234,3 +237,15 @@ class HuggingFaceEmbeddingServer(EmbeddingFunction[Documents]):
             ValidationError: If the configuration does not match the schema
         """
         validate_config_schema(config, "huggingface_server")
+
+
+def _get_shared_httpx_client(api_url: str, api_key: str):
+    key = (api_url, api_key)
+    client = _shared_httpx_clients.get(key)
+    if client is None:
+        import httpx
+
+        client = httpx.Client()
+        client.headers.update({"Authorization": f"Bearer {api_key}"})
+        _shared_httpx_clients[key] = client
+    return client
