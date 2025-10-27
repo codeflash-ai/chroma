@@ -17,18 +17,19 @@ class BaseHTTPClient:
 
     @staticmethod
     def _validate_host(host: str) -> None:
-        parsed = urlparse(host)
-        if "/" in host and parsed.scheme not in {"http", "https"}:
-            raise ValueError(
-                "Invalid URL. " f"Unrecognized protocol - {parsed.scheme}."
-            )
-        if "/" in host and (not host.startswith("http")):
-            raise ValueError(
-                "Invalid URL. "
-                "Seems that you are trying to pass URL as a host but without \
-                  specifying the protocol. "
-                "Please add http:// or https:// to the host."
-            )
+        if "/" in host:
+            parsed = urlparse(host)
+            if parsed.scheme not in {"http", "https"}:
+                raise ValueError(
+                    "Invalid URL. " f"Unrecognized protocol - {parsed.scheme}."
+                )
+            if not host.startswith("http"):
+                raise ValueError(
+                    "Invalid URL. "
+                    "Seems that you are trying to pass URL as a host but without \
+                      specifying the protocol. "
+                    "Please add http:// or https:// to the host."
+                )
 
     @staticmethod
     def resolve_url(
@@ -37,29 +38,42 @@ class BaseHTTPClient:
         default_api_path: Optional[str] = "",
         chroma_server_http_port: Optional[int] = 8000,
     ) -> str:
-        _skip_port = False
-        _chroma_server_host = chroma_server_host
-        BaseHTTPClient._validate_host(_chroma_server_host)
-        if _chroma_server_host.startswith("http"):
-            logger.debug("Skipping port as the user is passing a full URL")
-            _skip_port = True
-        parsed = urlparse(_chroma_server_host)
+        # Optimization: streamline variable usage
+        BaseHTTPClient._validate_host(chroma_server_host)
+        skip_port = chroma_server_host.startswith("http")
+        # Only parse once
+        parsed = urlparse(chroma_server_host)
 
-        scheme = "https" if chroma_server_ssl_enabled else parsed.scheme or "http"
-        net_loc = parsed.netloc or parsed.hostname or chroma_server_host
-        port = (
-            ":" + str(parsed.port or chroma_server_http_port) if not _skip_port else ""
-        )
-        path = parsed.path or default_api_path
+        # scheme
+        scheme = "https" if chroma_server_ssl_enabled else (parsed.scheme or "http")
 
+        # netloc
+        net_loc = parsed.netloc
+        if not net_loc:
+            net_loc = parsed.hostname or chroma_server_host
+
+        # port
+        port = ""
+        if not skip_port:
+            port_num = (
+                parsed.port if parsed.port is not None else chroma_server_http_port
+            )
+            if port_num is not None:
+                port = f":{port_num}"
+
+        # path
+        path = parsed.path or ""
         if not path or path == net_loc:
             path = default_api_path if default_api_path else ""
-        if not path.endswith(default_api_path or ""):
-            path = path + default_api_path if default_api_path else ""
-        full_url = urlunparse(
-            (scheme, f"{net_loc}{port}", quote(path.replace("//", "/")), "", "", "")
-        )
+        # Avoid redundant string concatenations when default_api_path is empty or already present
+        else:
+            if default_api_path and not path.endswith(default_api_path):
+                path = path + default_api_path
 
+        # Avoid unnecessary double slashes and quoting
+        safe_path = quote(path.replace("//", "/")) if path else ""
+
+        full_url = urlunparse((scheme, f"{net_loc}{port}", safe_path, "", "", ""))
         return full_url
 
     # requests removes None values from the built query string, but httpx includes it as an empty value
